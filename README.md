@@ -1,18 +1,48 @@
 # Message Bubble Generator
 
-Animates a chat conversation on a chroma-key background for use in video, and
-exports it as a WebM file. Each message types itself in one character
-(grapheme) at a time, growing its bubble to fit as it goes, and the
-conversation stack hangs off the bottom of the frame, easing upward as new
+Animates a chat conversation on a chroma-key background so you can key it into
+a video, and exports the result as a WebM file. Each message types itself in
+one grapheme at a time, its bubble growing to fit as it goes, while the
+conversation stack hangs off the bottom of the frame and eases upward as new
 bubbles arrive.
 
-There are two modes:
+No build step, no package manager, no dependencies — it is plain ES modules,
+HTML, and a `<canvas>`.
+
+![The app: controls on the left, the chroma-key stage on the right](docs/images/app.png)
+
+## What comes out
+
+The stage is the export. Every bubble is drawn on the canvas at the output
+resolution — nothing is a DOM element — so a recording is pixel-identical to
+the preview.
+
+![A rendered stage: Thai bubbles alternating left and right on chroma-key green](docs/images/stage.png)
+
+## Two modes
 
 - **Script** — paste a list of `L:`/`R:` prefixed lines into the textarea and
   press Play to animate the whole conversation on a timeline you can record.
+  An unprefixed line continues the previous message.
 - **Live** — type into the message box and press Enter to drop a bubble onto
   the stack immediately, one message at a time; useful for narrating a
-  conversation live while recording.
+  conversation while recording. Tab inside the input flips the side.
+
+Both modes feed the same renderer, so they look identical.
+
+## Settings
+
+| Setting | What it does |
+| --- | --- |
+| Typewriter animation | Off makes each bubble appear complete, with no reveal |
+| Typing speed | Milliseconds per grapheme; total type time is `graphemes × this`, uncapped |
+| Hold after typing | Pause once a message is fully typed |
+| Gap between bubbles | Pause before the next message starts typing |
+| Style | `iMessage` (pill + tail), `LINE` (rounded, optional sender name), `Flat` |
+| Aspect ratio | 9:16 (1080×1920), 1:1 (1080×1080), or 16:9 (1920×1080) |
+| Colours | Per-side bubble and text colour, plus the background key colour |
+| Transparent | Skips the background fill so the WebM carries alpha instead of a key colour |
+| Font | Size in output pixels, and the family |
 
 ## Running
 
@@ -22,14 +52,24 @@ ES modules are blocked over `file://`, so serve the folder:
 
 Then open <http://localhost:8000/index.html>.
 
+The server sends no cache headers, so append a unique query string
+(`?v=anything`) when reloading after a change — otherwise the browser will hand
+you the stale page.
+
+## Recording
+
+Press Record. In Script mode the recording stops itself when playback ends; in
+Live mode it runs until you press Stop. The file downloads as WebM at the
+selected resolution.
+
 ## Tests
 
-Open <http://localhost:8000/tests/tests.html>. The page runs the unit tests
-for the parser, the timeline, live-mode item building, and text
-measurement/wrapping, and prints a pass/fail summary.
+Open <http://localhost:8000/tests/tests.html>. The page runs the unit tests for
+the parser, the timeline, live-mode item building, and text
+measurement/wrapping, then prints `N passed, M failed` plus one line per test.
 
-Rendering, camera movement, and WebM export are verified by hand; see the
-checklist below.
+Rendering, camera movement, and WebM export have no automated coverage by
+design; they are verified by hand against the checklist below.
 
 ## Manual checks before shipping a change
 
@@ -66,3 +106,17 @@ checklist below.
     eases the stack upward.
 15. At a narrow or short browser window, the canvas scales down to fit the
     stage instead of being clipped.
+16. Bubble text is optically centred in its bubble — equal space above and
+    below a single line — and Thai vowels and tone marks are not clipped by
+    the bubble's top edge.
+17. In iMessage style, the tail stays welded to the bubble at every message
+    length, including a one-character bubble and a bubble wide enough to
+    reach the wrap width.
+
+## Architecture
+
+![Architecture: input becomes messages, messages become timed items, timed items become pixels](docs/architecture.svg)
+
+`app.js` is the only module that touches the DOM; everything below it is pure
+or canvas-only. Design history lives in `docs/superpowers/`. Notes for anyone
+(human or agent) changing this code are in `CLAUDE.md`.

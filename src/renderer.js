@@ -26,44 +26,65 @@ function easeOutBack(t) {
   return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
 }
 
-function roundedRect(ctx, x, y, w, h, r) {
-  const radius = Math.min(r, w / 2, h / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + radius, y);
-  ctx.arcTo(x + w, y, x + w, y + h, radius);
-  ctx.arcTo(x + w, y + h, x, y + h, radius);
-  ctx.arcTo(x, y + h, x, y, radius);
-  ctx.arcTo(x, y, x + w, y, radius);
+// Appends a clockwise rounded-rect subpath. Callers own beginPath/fill so the
+// body and the tail can be filled as a single path (see drawBubbleShape).
+function roundedRectPath(ctx, x, y, w, h, r) {
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
   ctx.closePath();
 }
 
-function drawTail(ctx, x, y, w, h, side, size) {
-  ctx.beginPath();
+// The tail's two base points are placed *on the bubble's own corner arc*, so it
+// stays welded to the body whatever radius the shape ended up with. Anchoring
+// it to a fixed offset detaches it as soon as the bubble goes pill-shaped.
+function tailPath(ctx, x, y, w, h, side, r, size) {
+  const dir = side === 'right' ? 1 : -1;
+  const cx = (side === 'right' ? x + w : x) - dir * r;
+  const cy = y + h - r;
+  const at = (t) => ({ x: cx + dir * r * Math.sin(t), y: cy + r * Math.cos(t) });
+
+  // The base straddles the corner arc's 45° point. Its half-span is solved
+  // from the chord length so the tail keeps a constant size no matter how
+  // fat the corner radius got.
+  const s = Math.min(size, r);
+  const mid = Math.PI / 4;
+  const half = Math.asin(Math.min(0.98, s / (2 * r)));
+  const a = at(mid + half);
+  const b = at(mid - half);
+  const m = at(mid);
+  const tip = { x: m.x + dir * s * 0.95, y: m.y + s * 0.62 };
+
+  // Clockwise on screen for both sides, matching roundedRectPath, so the
+  // nonzero fill unions the two subpaths instead of punching a hole.
+  const outCp = { x: a.x + dir * s * 0.62, y: a.y + s * 0.30 };
+  const backCp = { x: b.x + dir * s * 0.34, y: b.y - s * 0.22 };
   if (side === 'right') {
-    ctx.moveTo(x + w - size, y + h);
-    ctx.quadraticCurveTo(x + w + size * 0.4, y + h, x + w + size * 0.9, y + h - size * 0.1);
-    ctx.quadraticCurveTo(x + w + size * 0.1, y + h - size * 0.2, x + w, y + h - size);
+    ctx.moveTo(a.x, a.y);
+    ctx.quadraticCurveTo(outCp.x, outCp.y, tip.x, tip.y);
+    ctx.quadraticCurveTo(backCp.x, backCp.y, b.x, b.y);
   } else {
-    ctx.moveTo(x + size, y + h);
-    ctx.quadraticCurveTo(x - size * 0.4, y + h, x - size * 0.9, y + h - size * 0.1);
-    ctx.quadraticCurveTo(x - size * 0.1, y + h - size * 0.2, x, y + h - size);
+    ctx.moveTo(b.x, b.y);
+    ctx.quadraticCurveTo(backCp.x, backCp.y, tip.x, tip.y);
+    ctx.quadraticCurveTo(outCp.x, outCp.y, a.x, a.y);
   }
   ctx.closePath();
-  ctx.fill();
 }
 
 function drawBubbleShape(ctx, style, x, y, w, h, side, m) {
-  if (style === 'imessage') {
-    roundedRect(ctx, x, y, w, h, Math.round(h / 2 < m.radius * 2 ? h / 2 : m.radius * 2));
-    ctx.fill();
-    drawTail(ctx, x, y, w, h, side, m.radius);
-  } else if (style === 'line') {
-    roundedRect(ctx, x, y, w, h, m.radius);
-    ctx.fill();
-  } else {
-    roundedRect(ctx, x, y, w, h, Math.round(m.radius * 0.5));
-    ctx.fill();
-  }
+  const requested = style === 'imessage'
+    ? m.radius * 2
+    : style === 'line'
+      ? m.radius
+      : m.radius * 0.5;
+  const r = Math.min(Math.round(requested), w / 2, h / 2);
+
+  ctx.beginPath();
+  roundedRectPath(ctx, x, y, w, h, r);
+  if (style === 'imessage') tailPath(ctx, x, y, w, h, side, r, m.radius * 0.8);
+  ctx.fill();
 }
 
 function colorsFor(side, settings) {
@@ -168,10 +189,12 @@ export function renderFrame(ctx, timeline, elapsed, settings) {
 
     drawSenderName(ctx, box, settings, m);
     ctx.fillStyle = fg;
-    ctx.textBaseline = 'top';
+    // Centre each line inside its own line box. With 'top' the whole 1.32
+    // leading piles up under the glyphs and the text rides the bubble's roof.
+    ctx.textBaseline = 'middle';
     ctx.font = `${settings.fontSize}px ${settings.fontFamily}`;
     box.lines.forEach((line, i) => {
-      ctx.fillText(line, box.x + m.padX, box.y + m.padY + i * m.lineHeight);
+      ctx.fillText(line, box.x + m.padX, box.y + m.padY + (i + 0.5) * m.lineHeight);
     });
 
     ctx.restore();
