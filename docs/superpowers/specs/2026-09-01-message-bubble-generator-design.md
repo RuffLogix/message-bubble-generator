@@ -150,6 +150,40 @@ Manual verification, since this is a single-user visual tool with no build pipel
 
 A small parser test harness may be added as a plain HTML page that runs assertions and prints results, if the parser rules prove fiddly.
 
+## Addendum: Live typing mode (added 2026-09-01, after Task 5)
+
+The tool has two modes, chosen with a toggle at the top of the control panel.
+
+**Script mode** is everything described above: paste a message list, press Play, watch it animate from a precomputed timeline.
+
+**Live mode** is interactive. A single-line text box sits beside a Left/Right side toggle. Typing a message and pressing Enter drops that bubble onto the stack immediately; the previous bubbles stay where they are and the stack grows. Pressing Enter again adds the next bubble below. There is no Play button and no total duration — the animation is whatever the author types, as they type it.
+
+Live mode reuses the renderer unchanged. A live session is just a timeline built one item at a time: on each Enter, the message is stamped with the current session clock and appended to the item list. Because `renderFrame` is already a pure function of elapsed time over an item list, it does not know or care whether the list was precomputed or grown live.
+
+Typing behavior on Enter follows the same typing setting as script mode: when typing animation is on, the three-dot indicator plays for `typingMs` at the chosen side and the bubble appears after it; when off, the bubble appears at once.
+
+Side selection is a toggle button next to the input, also flipped by pressing Tab inside the input. The chosen side persists until flipped, so several messages in a row from the same speaker need no extra clicks.
+
+Recording in live mode is manual: press Record, type the conversation, press Stop, and the WebM downloads. Script mode keeps its existing behavior of stopping itself when playback ends.
+
+A Clear button empties the live stack and resets the camera.
+
+## Addendum 2: Typewriter text and bottom-anchored stack (added 2026-09-02)
+
+The author supplied a reference recording. It changes three things that the original design got wrong, and they supersede the corresponding parts of the sections above.
+
+**Typewriter instead of a typing indicator.** A bubble appears already containing its first character, and the rest of the text types in one character at a time while the bubble grows to fit. There is no three-dot indicator; it is removed, not made optional. Typing duration is therefore derived from the text — `graphemeCount * msPerChar` — rather than being a fixed setting, and the `typingMs` setting disappears.
+
+Characters are revealed by grapheme cluster, not by code point, for the same reason wrapping breaks by grapheme: revealing a Thai base consonant and its tone mark on separate frames would flash a broken glyph.
+
+**Timing model.** Each message runs: type for `graphemeCount * msPerChar` (zero when the typewriter is off, so the bubble appears complete), hold for a fixed `holdMs`, then wait `gapMs` before the next message begins. The old length-derived hold and its 400–4000ms clamp are removed — with a typewriter, length already drives duration, and clamping it twice made the pacing unpredictable.
+
+**Bottom-anchored stack.** The bubble column is anchored to the bottom of the stage from the very first message, not to the top. Each new bubble pushes the stack upward, and the movement eases. This replaces the earlier "start at the top, scroll only once content overflows" behavior; the camera target becomes a single uniform expression with no overflow branch, positive while the content is short and negative once it exceeds the frame.
+
+**Smaller default text.** The reference sets its bubbles at roughly 1.7% of frame height. The default font size drops from 44 to 34 at 1080×1920. It remains adjustable.
+
+Both sides are kept. The reference uses only the left side, but the side toggle costs nothing and the author wants it available.
+
 ## Out of Scope
 
 - Avatars and profile images.

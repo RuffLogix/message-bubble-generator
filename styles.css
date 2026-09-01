@@ -1,0 +1,193 @@
+:root {
+  color-scheme: light dark;
+  --panel-bg: #f4f4f5;
+  --panel-fg: #18181b;
+  --stage-bg: #27272a;
+  --border: #d4d4d8;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --panel-bg: #18181b;
+    --panel-fg: #f4f4f5;
+    --stage-bg: #09090b;
+    --border: #3f3f46;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--panel-fg);
+}
+
+.app {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  height: 100vh;
+}
+
+.panel {
+  background: var(--panel-bg);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.stage {
+  background: var(--stage-bg);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  overflow: hidden;
+}
+
+#canvas {
+  max-width: 100%;
+  max-height: 100%;
+  /* Grid items default to min-height/min-width:auto, which floors them at
+     their own content size — for a canvas that "content size" is its
+     unconstrained backing-store size. That floor wins over max-height:100%
+     whenever the stage is shorter than the canvas would naturally render,
+     so the canvas overflows/gets clipped instead of scaling down. Zeroing
+     the auto minimums lets max-width/max-height actually do the shrinking. */
+  min-width: 0;
+  min-height: 0;
+  box-shadow: 0 8px 32px rgb(0 0 0 / 0.4);
+}
+
+@media (max-width: 800px) {
+  .app {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+    height: auto;
+  }
+  .panel {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  /* .app's height goes auto above so the panel can grow with its content,
+     but that leaves the stage row without a definite height to hand down —
+     #canvas's max-height:100% (and the min-height:0 fix above) both need
+     something concrete to resolve against. */
+  .stage {
+    height: 70vh;
+  }
+}
+
+.field {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.field > span {
+  display: block;
+  margin-bottom: 4px;
+  opacity: 0.8;
+}
+
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: canvas;
+  color: inherit;
+}
+
+.field textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.field input[type='color'] {
+  height: 32px;
+  padding: 2px;
+}
+
+.field.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.field.checkbox input {
+  width: auto;
+}
+
+.field.checkbox > span {
+  margin: 0;
+}
+
+.buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+  position: sticky;
+  bottom: 0;
+  background: var(--panel-bg);
+  padding: 8px 0;
+}
+
+.buttons button {
+  flex: 1;
+  padding: 10px;
+  font: inherit;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: canvas;
+  color: inherit;
+  cursor: pointer;
+}
+
+.buttons button:hover:not(:disabled) {
+  background: color-mix(in srgb, canvas 85%, var(--panel-fg));
+}
+
+.buttons button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.note {
+  font-size: 12px;
+  min-height: 1.4em;
+  opacity: 0.8;
+}
+
+#scriptControls[hidden],
+#liveControls[hidden] {
+  display: none;
+}
+
+.live-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.live-row button {
+  flex: 1;
+  padding: 8px;
+  font: inherit;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: canvas;
+  color: inherit;
+  cursor: pointer;
+}
+
+.live-row button:hover {
+  background: color-mix(in srgb, canvas 85%, var(--panel-fg));
+}

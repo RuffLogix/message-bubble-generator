@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Tests — message bubble generator</title>
+  </head>
+  <body>
+    <h1>Tests</h1>
+    <div id="results"></div>
+    <script type="module">
+      import { report } from './assert.js';
+      await import('./harness.test.js');
+      await import('./parse.test.js');
+      await import('./timeline.test.js');
+      await import('./layout.test.js');
+      await import('./live.test.js');
+      report(document.getElementById('results'));
+    </script>
+  </body>
+</html>
