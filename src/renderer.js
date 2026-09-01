@@ -1,4 +1,4 @@
-import { measureBubble } from './layout.js';
+import { graphemes, measureBubble } from './layout.js';
 
 const APPEAR_MS = 220;
 const SIDE_MARGIN_RATIO = 0.06;
@@ -72,6 +72,18 @@ function colorsFor(side, settings) {
     : { bg: settings.rightBg, fg: settings.rightFg };
 }
 
+// How much of an item's text is on screen at `elapsed`. A bubble is never
+// empty: once typing starts, at least the first grapheme shows.
+function visibleText(item, elapsed) {
+  if (elapsed >= item.typeEnd) return item.text;
+
+  const parts = graphemes(item.text);
+  const span = item.typeEnd - item.typeStart;
+  const progress = span <= 0 ? 1 : (elapsed - item.typeStart) / span;
+  const shown = Math.max(1, Math.ceil(progress * parts.length));
+  return parts.slice(0, shown).join('');
+}
+
 // Returns the stacked boxes for every item visible at `elapsed`, in draw order.
 // `y` is relative to the top of the content column, before any camera offset.
 export function layoutScene(ctx, timeline, elapsed, settings) {
@@ -82,21 +94,11 @@ export function layoutScene(ctx, timeline, elapsed, settings) {
   let y = 0;
 
   for (const item of timeline.items) {
-    const typing =
-      item.typingStart !== null && elapsed >= item.typingStart && elapsed < item.typingEnd;
-    const appeared = elapsed >= item.appearAt;
-    if (!typing && !appeared) break;
+    if (elapsed < item.typeStart) break;
 
-    if (typing) {
-      const w = Math.round(settings.fontSize * 3.4);
-      const h = Math.round(settings.fontSize * 1.9);
-      boxes.push({ kind: 'typing', side: item.side, x: 0, y, width: w, height: h, progress: 1, item });
-      y += h + m.gutter;
-      break;
-    }
-
-    const measured = measureBubble(ctx, item.text, m);
-    const progress = Math.min(1, (elapsed - item.appearAt) / APPEAR_MS);
+    const text = visibleText(item, elapsed);
+    const measured = measureBubble(ctx, text, m);
+    const progress = Math.min(1, (elapsed - item.typeStart) / APPEAR_MS);
     boxes.push({
       kind: 'bubble',
       side: item.side,
@@ -118,25 +120,6 @@ export function layoutScene(ctx, timeline, elapsed, settings) {
   }
 
   return { boxes, contentHeight: y, metrics: m };
-}
-
-function drawTypingDots(ctx, box, settings, elapsed) {
-  const { fg } = colorsFor(box.side, settings);
-  const r = Math.round(settings.fontSize * 0.16);
-  const spacing = r * 3.2;
-  const cx = box.x + box.width / 2 - spacing;
-  const cy = box.y + box.height / 2;
-
-  ctx.fillStyle = fg;
-  for (let i = 0; i < 3; i += 1) {
-    const phase = (elapsed / 500 + i * 0.22) % 1;
-    const lift = Math.sin(phase * Math.PI * 2) * r * 0.9;
-    ctx.globalAlpha = 0.45 + 0.55 * ((Math.sin(phase * Math.PI * 2) + 1) / 2);
-    ctx.beginPath();
-    ctx.arc(cx + i * spacing, cy - lift, r, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.globalAlpha = 1;
 }
 
 function drawSenderName(ctx, box, settings, m) {
@@ -166,7 +149,7 @@ export function renderFrame(ctx, timeline, elapsed, settings) {
   const m = scene.metrics;
 
   ctx.save();
-  ctx.translate(0, m.bottomPad + (settings.cameraY ?? 0));
+  ctx.translate(0, settings.cameraY ?? 0);
 
   for (const box of scene.boxes) {
     const { bg, fg } = colorsFor(box.side, settings);
@@ -183,17 +166,13 @@ export function renderFrame(ctx, timeline, elapsed, settings) {
     ctx.fillStyle = bg;
     drawBubbleShape(ctx, settings.style, box.x, box.y, box.width, box.height, box.side, m);
 
-    if (box.kind === 'typing') {
-      drawTypingDots(ctx, box, settings, elapsed);
-    } else {
-      drawSenderName(ctx, box, settings, m);
-      ctx.fillStyle = fg;
-      ctx.textBaseline = 'top';
-      ctx.font = `${settings.fontSize}px ${settings.fontFamily}`;
-      box.lines.forEach((line, i) => {
-        ctx.fillText(line, box.x + m.padX, box.y + m.padY + i * m.lineHeight);
-      });
-    }
+    drawSenderName(ctx, box, settings, m);
+    ctx.fillStyle = fg;
+    ctx.textBaseline = 'top';
+    ctx.font = `${settings.fontSize}px ${settings.fontFamily}`;
+    box.lines.forEach((line, i) => {
+      ctx.fillText(line, box.x + m.padX, box.y + m.padY + i * m.lineHeight);
+    });
 
     ctx.restore();
   }
@@ -202,9 +181,9 @@ export function renderFrame(ctx, timeline, elapsed, settings) {
   return scene;
 }
 
+// The stack hangs from the bottom of the stage: positive while the content is
+// short, negative once it outgrows the frame and the top must scroll away.
 export function cameraTargetY(contentHeight, settings) {
   const m = metricsFor(settings);
-  const usable = settings.height - m.bottomPad * 2;
-  if (contentHeight <= usable) return 0;
-  return -(contentHeight - usable);
+  return settings.height - m.bottomPad - contentHeight;
 }
