@@ -63,3 +63,89 @@ body {
     border-bottom: 1px solid var(--border);
   }
 }
+
+.field {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.field > span {
+  display: block;
+  margin-bottom: 4px;
+  opacity: 0.8;
+}
+
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: canvas;
+  color: inherit;
+}
+
+.field textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.field input[type='color'] {
+  height: 32px;
+  padding: 2px;
+}
+
+.field.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.field.checkbox input {
+  width: auto;
+}
+
+.field.checkbox > span {
+  margin: 0;
+}
+
+.buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+  position: sticky;
+  bottom: 0;
+  background: var(--panel-bg);
+  padding: 8px 0;
+}
+
+.buttons button {
+  flex: 1;
+  padding: 10px;
+  font: inherit;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: canvas;
+  color: inherit;
+  cursor: pointer;
+}
+
+.buttons button:hover:not(:disabled) {
+  background: color-mix(in srgb, canvas 85%, var(--panel-fg));
+}
+
+.buttons button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.note {
+  font-size: 12px;
+  min-height: 1.4em;
+  opacity: 0.8;
+}

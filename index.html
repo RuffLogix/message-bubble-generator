@@ -8,7 +8,74 @@
   </head>
   <body>
     <main class="app">
-      <aside class="panel" id="panel"></aside>
+      <aside class="panel">
+        <label class="field">
+          <span>Messages</span>
+          <textarea id="messages" rows="10" spellcheck="false">L: สวัสดีครับ
+R: ว่าไง
+L: วันนี้ว่างมั้ย
+R: ว่าง</textarea>
+        </label>
+
+        <label class="field checkbox">
+          <input type="checkbox" id="typingEnabled" checked />
+          <span>Typing animation</span>
+        </label>
+
+        <label class="field"><span>Typing duration (ms)</span>
+          <input type="number" id="typingMs" value="900" min="0" max="10000" step="50" /></label>
+        <label class="field"><span>Milliseconds per character</span>
+          <input type="number" id="msPerChar" value="60" min="0" max="1000" step="5" /></label>
+        <label class="field"><span>Gap between bubbles (ms)</span>
+          <input type="number" id="gapMs" value="300" min="0" max="10000" step="50" /></label>
+
+        <label class="field"><span>Style</span>
+          <select id="style">
+            <option value="imessage" selected>iMessage</option>
+            <option value="line">LINE</option>
+            <option value="minimal">Minimal</option>
+          </select></label>
+        <label class="field"><span>Sender name (LINE style)</span>
+          <input type="text" id="senderName" value="" /></label>
+        <label class="field"><span>Aspect ratio</span>
+          <select id="aspect">
+            <option value="9:16" selected>9:16 — 1080×1920</option>
+            <option value="1:1">1:1 — 1080×1080</option>
+            <option value="16:9">16:9 — 1920×1080</option>
+          </select></label>
+
+        <label class="field"><span>Left bubble background</span>
+          <input type="color" id="leftBg" value="#FFFFFF" /></label>
+        <label class="field"><span>Left bubble text</span>
+          <input type="color" id="leftFg" value="#000000" /></label>
+        <label class="field"><span>Right bubble background</span>
+          <input type="color" id="rightBg" value="#FFFFFF" /></label>
+        <label class="field"><span>Right bubble text</span>
+          <input type="color" id="rightFg" value="#000000" /></label>
+        <label class="field"><span>Stage background</span>
+          <input type="color" id="bgColor" value="#00B140" /></label>
+        <label class="field checkbox">
+          <input type="checkbox" id="transparent" />
+          <span>Transparent background (experimental)</span>
+        </label>
+
+        <label class="field"><span>Font size (px)</span>
+          <input type="number" id="fontSize" value="44" min="12" max="200" step="1" /></label>
+        <label class="field"><span>Font</span>
+          <select id="fontFamily">
+            <option value='system-ui, "IBM Plex Sans Thai", "Noto Sans Thai", sans-serif' selected>System</option>
+            <option value='"IBM Plex Sans Thai", "Noto Sans Thai", system-ui, sans-serif'>Plex Sans Thai</option>
+            <option value='"Noto Sans Thai", system-ui, sans-serif'>Noto Sans Thai</option>
+            <option value='ui-monospace, "JetBrains Mono", monospace'>Monospace</option>
+          </select></label>
+
+        <div class="buttons">
+          <button id="play" type="button">Play</button>
+          <button id="reset" type="button">Reset</button>
+          <button id="record" type="button">Record</button>
+        </div>
+        <p class="note" id="note"></p>
+      </aside>
       <section class="stage" id="stage">
         <canvas id="canvas"></canvas>
       </section>

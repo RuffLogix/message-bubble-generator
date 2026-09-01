@@ -2,48 +2,130 @@ import { parseMessages } from './parse.js';
 import { buildTimeline } from './timeline.js';
 import { renderFrame, cameraTargetY } from './renderer.js';
 
-const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d');
-canvas.width = 1080;
-canvas.height = 1920;
+const el = (id) => document.getElementById(id);
+const canvas = el('canvas');
+const ctx = canvas.getContext('2d', { alpha: true });
+const note = el('note');
 
-const settings = {
-  width: 1080,
-  height: 1920,
-  style: 'imessage',
-  bgColor: '#00B140',
-  transparent: false,
-  leftBg: '#FFFFFF',
-  leftFg: '#000000',
-  rightBg: '#FFFFFF',
-  rightFg: '#000000',
-  fontSize: 44,
-  fontFamily: 'system-ui, sans-serif',
-  senderName: '',
-  cameraY: 0,
+const ASPECTS = {
+  '9:16': [1080, 1920],
+  '1:1': [1080, 1080],
+  '16:9': [1920, 1080],
 };
 
-const messages = parseMessages('L: สวัสดีครับ\nR: ว่าไง\nL: วันนี้ว่างมั้ย\nR: ว่าง');
-const timeline = buildTimeline(messages, {
-  msPerChar: 60,
-  typingMs: 900,
-  gapMs: 300,
-  typingEnabled: true,
-});
+function num(id, min, max, fallback) {
+  const input = el(id);
+  let value = Number(input.value);
+  if (!Number.isFinite(value)) value = fallback;
+  value = Math.min(max, Math.max(min, value));
+  if (String(value) !== input.value) input.value = String(value);
+  return value;
+}
 
+function readTiming() {
+  return {
+    msPerChar: num('msPerChar', 0, 1000, 60),
+    typingMs: num('typingMs', 0, 10000, 900),
+    gapMs: num('gapMs', 0, 10000, 300),
+    typingEnabled: el('typingEnabled').checked,
+  };
+}
+
+function readSettings() {
+  const [width, height] = ASPECTS[el('aspect').value];
+  return {
+    width,
+    height,
+    style: el('style').value,
+    bgColor: el('bgColor').value,
+    transparent: el('transparent').checked,
+    leftBg: el('leftBg').value,
+    leftFg: el('leftFg').value,
+    rightBg: el('rightBg').value,
+    rightFg: el('rightFg').value,
+    fontSize: num('fontSize', 12, 200, 44),
+    fontFamily: el('fontFamily').value,
+    senderName: el('senderName').value,
+    cameraY: 0,
+  };
+}
+
+let timeline = { items: [], duration: 0 };
+let settings = readSettings();
+let playing = false;
+let startedAt = 0;
 let camera = 0;
-let last = performance.now();
-const start = performance.now();
+let lastFrame = 0;
 
-function loop(now) {
-  const dt = Math.min(64, now - last);
-  last = now;
-  const elapsed = (now - start) % timeline.duration;
+function rebuild() {
+  settings = readSettings();
+  canvas.width = settings.width;
+  canvas.height = settings.height;
+  timeline = buildTimeline(parseMessages(el('messages').value), readTiming());
+}
 
+function drawStatic() {
+  rebuild();
+  camera = 0;
+  const probe = renderFrame(ctx, timeline, timeline.duration, { ...settings, cameraY: 0 });
+  camera = cameraTargetY(probe.contentHeight, settings);
+  renderFrame(ctx, timeline, timeline.duration, { ...settings, cameraY: camera });
+}
+
+function frame(now) {
+  if (!playing) return;
+  const dt = Math.min(64, now - lastFrame);
+  lastFrame = now;
+
+  const elapsed = now - startedAt;
   const probe = renderFrame(ctx, timeline, elapsed, { ...settings, cameraY: camera });
   const target = cameraTargetY(probe.contentHeight, settings);
   camera += (target - camera) * (1 - Math.exp(-dt / 120));
 
-  requestAnimationFrame(loop);
+  if (elapsed >= timeline.duration) {
+    playing = false;
+    el('play').textContent = 'Play';
+    document.dispatchEvent(new CustomEvent('playback-ended'));
+    return;
+  }
+  requestAnimationFrame(frame);
 }
-requestAnimationFrame(loop);
+
+export function play() {
+  rebuild();
+  if (timeline.items.length === 0) {
+    note.textContent = 'Message list is empty.';
+    return false;
+  }
+  note.textContent = '';
+  camera = 0;
+  playing = true;
+  startedAt = performance.now();
+  lastFrame = startedAt;
+  el('play').textContent = 'Playing…';
+  requestAnimationFrame(frame);
+  return true;
+}
+
+export function stop() {
+  playing = false;
+  el('play').textContent = 'Play';
+}
+
+el('play').addEventListener('click', play);
+el('reset').addEventListener('click', () => {
+  stop();
+  drawStatic();
+});
+
+for (const id of [
+  'messages', 'typingEnabled', 'typingMs', 'msPerChar', 'gapMs', 'style',
+  'senderName', 'aspect', 'leftBg', 'leftFg', 'rightBg', 'rightFg',
+  'bgColor', 'transparent', 'fontSize', 'fontFamily',
+]) {
+  el(id).addEventListener('input', () => {
+    if (!playing) drawStatic();
+  });
+}
+
+drawStatic();
