@@ -175,6 +175,10 @@ recordButton.addEventListener('click', async () => {
     note.textContent = 'Message list is empty.';
     return;
   }
+  if (playing) {
+    note.textContent = 'Stop playback before recording.';
+    return;
+  }
 
   activeRecorder = createRecorder(canvas, mimeType, 60);
   activeRecorder.start();
