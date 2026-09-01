@@ -1,6 +1,6 @@
 import { parseMessages } from './parse.js';
 import { buildTimeline } from './timeline.js';
-import { renderFrame } from './renderer.js';
+import { renderFrame, cameraTargetY } from './renderer.js';
 
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
@@ -31,10 +31,19 @@ const timeline = buildTimeline(messages, {
   typingEnabled: true,
 });
 
+let camera = 0;
+let last = performance.now();
 const start = performance.now();
+
 function loop(now) {
+  const dt = Math.min(64, now - last);
+  last = now;
   const elapsed = (now - start) % timeline.duration;
-  renderFrame(ctx, timeline, elapsed, settings);
+
+  const probe = renderFrame(ctx, timeline, elapsed, { ...settings, cameraY: camera });
+  const target = cameraTargetY(probe.contentHeight, settings);
+  camera += (target - camera) * (1 - Math.exp(-dt / 120));
+
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);

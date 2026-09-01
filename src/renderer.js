@@ -166,7 +166,7 @@ export function renderFrame(ctx, timeline, elapsed, settings) {
   const m = scene.metrics;
 
   ctx.save();
-  ctx.translate(0, settings.cameraY ?? 0);
+  ctx.translate(0, m.bottomPad + (settings.cameraY ?? 0));
 
   for (const box of scene.boxes) {
     const { bg, fg } = colorsFor(box.side, settings);
@@ -200,4 +200,11 @@ export function renderFrame(ctx, timeline, elapsed, settings) {
 
   ctx.restore();
   return scene;
+}
+
+export function cameraTargetY(contentHeight, settings) {
+  const m = metricsFor(settings);
+  const usable = settings.height - m.bottomPad * 2;
+  if (contentHeight <= usable) return 0;
+  return -(contentHeight - usable);
 }
