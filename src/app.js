@@ -1,6 +1,7 @@
 import { parseMessages } from './parse.js';
 import { buildTimeline } from './timeline.js';
 import { renderFrame, cameraTargetY } from './renderer.js';
+import { pickMimeType, createRecorder, downloadBlob } from './recorder.js';
 
 const el = (id) => document.getElementById(id);
 const canvas = el('canvas');
@@ -61,6 +62,9 @@ function rebuild() {
   settings = readSettings();
   if (canvas.width !== settings.width) canvas.width = settings.width;
   if (canvas.height !== settings.height) canvas.height = settings.height;
+  canvas.style.background = settings.transparent
+    ? 'repeating-conic-gradient(#bbb 0% 25%, #fff 0% 50%) 0 0 / 40px 40px'
+    : 'none';
   timeline = buildTimeline(parseMessages(el('messages').value), readTiming());
 }
 
@@ -139,3 +143,47 @@ for (const id of [
 }
 
 drawStatic();
+
+const recordButton = el('record');
+const mimeType = pickMimeType();
+let activeRecorder = null;
+
+if (!mimeType) {
+  recordButton.disabled = true;
+  recordButton.title = 'This browser cannot record WebM. Screen record the preview instead.';
+}
+
+async function finishRecording() {
+  if (!activeRecorder) return;
+  const recorder = activeRecorder;
+  activeRecorder = null;
+  recordButton.textContent = 'Record';
+  const blob = await recorder.stop();
+  downloadBlob(blob, 'message-bubbles.webm');
+  note.textContent = `Saved ${(blob.size / 1_000_000).toFixed(1)} MB.`;
+}
+
+recordButton.addEventListener('click', async () => {
+  if (activeRecorder) {
+    stop();
+    await finishRecording();
+    return;
+  }
+
+  rebuild();
+  if (timeline.items.length === 0) {
+    note.textContent = 'Message list is empty.';
+    return;
+  }
+
+  activeRecorder = createRecorder(canvas, mimeType, 60);
+  activeRecorder.start();
+  recordButton.textContent = 'Stop';
+  note.textContent = 'Recording…';
+  play();
+});
+
+document.addEventListener('playback-ended', () => {
+  if (!activeRecorder) return;
+  setTimeout(finishRecording, 400);
+});
