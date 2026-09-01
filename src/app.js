@@ -15,13 +15,31 @@ const ASPECTS = {
   '16:9': [1920, 1080],
 };
 
-function num(id, min, max, fallback) {
-  const input = el(id);
-  let value = Number(input.value);
+// Pure clamp: never touches the DOM. An empty string means "nothing
+// committed yet" — it returns fallback rather than being coerced to 0, so a
+// field the author just cleared doesn't render as if they'd typed its
+// minimum.
+function clampNum(raw, min, max, fallback) {
+  if (raw.trim() === '') return fallback;
+  let value = Number(raw);
   if (!Number.isFinite(value)) value = fallback;
-  value = Math.min(max, Math.max(min, value));
-  if (String(value) !== input.value) input.value = String(value);
-  return value;
+  return Math.min(max, Math.max(min, value));
+}
+
+// Used by the render path on every keystroke, so it must NOT write back to
+// the element — doing so mid-edit fights the caret (see normalizeNumberInput
+// for the write-back, applied at change/blur instead).
+function num(id, min, max, fallback) {
+  return clampNum(el(id).value, min, max, fallback);
+}
+
+// Snaps a numeric field's displayed value to its clamped form. Called on
+// 'change'/'blur' only, once the author has committed a value, not on every
+// 'input' keystroke.
+function normalizeNumberInput(id, min, max, fallback) {
+  const input = el(id);
+  const clamped = clampNum(input.value, min, max, fallback);
+  if (String(clamped) !== input.value) input.value = String(clamped);
 }
 
 function readTiming() {
@@ -78,6 +96,7 @@ function liveFrame(now) {
 }
 
 function startLive() {
+  if (liveRunning) return;
   stop();
   settings = readSettings();
   canvas.width = settings.width;
@@ -254,7 +273,19 @@ for (const id of [
       // guard still matters — resizing mid-recording would break the
       // in-flight capture stream. Not dead code: still reachable via
       // 'aspect' during a live recording.
-      if (!activeRecorder) {
+      if (activeRecorder) {
+        // readSettings() just picked up whatever the Aspect select now
+        // shows, but the canvas (and the in-flight capture stream) can't
+        // resize until recording stops. Pin settings back to the canvas's
+        // actual, currently-recording dimensions so renderFrame/layoutScene
+        // keep laying out for the stage that's really there — otherwise the
+        // stack renders for the new aspect on a canvas still sized for the
+        // old one (stale pixels outside the redrawn area, bubbles positioned
+        // off-canvas). The select's new value takes effect once recording
+        // stops and any settings-input fires the else-branch below.
+        settings.width = canvas.width;
+        settings.height = canvas.height;
+      } else {
         canvas.width = settings.width;
         canvas.height = settings.height;
       }
@@ -265,6 +296,19 @@ for (const id of [
       drawStatic();
     }
   });
+}
+
+// Write-back for the numeric fields, deferred to commit time (change/blur)
+// rather than every keystroke — see clampNum/num above for why.
+const NUMERIC_FIELDS = {
+  fontSize: [12, 200, 34],
+  msPerChar: [0, 1000, 45],
+  holdMs: [0, 10000, 700],
+  gapMs: [0, 10000, 300],
+};
+for (const [id, [min, max, fallback]] of Object.entries(NUMERIC_FIELDS)) {
+  el(id).addEventListener('change', () => normalizeNumberInput(id, min, max, fallback));
+  el(id).addEventListener('blur', () => normalizeNumberInput(id, min, max, fallback));
 }
 
 const recordButton = el('record');
