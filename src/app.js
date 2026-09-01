@@ -26,8 +26,8 @@ function num(id, min, max, fallback) {
 
 function readTiming() {
   return {
-    msPerChar: num('msPerChar', 0, 1000, 60),
-    typingMs: num('typingMs', 0, 10000, 900),
+    msPerChar: num('msPerChar', 0, 1000, 45),
+    holdMs: num('holdMs', 0, 10000, 700),
     gapMs: num('gapMs', 0, 10000, 300),
     typingEnabled: el('typingEnabled').checked,
   };
@@ -45,7 +45,7 @@ function readSettings() {
     leftFg: el('leftFg').value,
     rightBg: el('rightBg').value,
     rightFg: el('rightFg').value,
-    fontSize: num('fontSize', 12, 200, 44),
+    fontSize: num('fontSize', 12, 200, 34),
     fontFamily: el('fontFamily').value,
     senderName: el('senderName').value,
     cameraY: 0,
@@ -144,7 +144,8 @@ export function play() {
     return false;
   }
   note.textContent = '';
-  camera = 0;
+  const probe = renderFrame(ctx, timeline, 0, { ...settings, cameraY: 0 });
+  camera = cameraTargetY(probe.contentHeight, settings);
   playing = true;
   el('play').disabled = true;
   startedAt = performance.now();
@@ -185,7 +186,8 @@ async function applyMode() {
 
   if (live) {
     liveItems = [];
-    camera = 0;
+    settings = readSettings();
+    camera = cameraTargetY(0, settings);
     startLive();
     el('liveInput').focus();
   } else {
@@ -204,7 +206,7 @@ el('liveSide').addEventListener('click', () => {
 
 el('liveClear').addEventListener('click', () => {
   liveItems = [];
-  camera = 0;
+  camera = cameraTargetY(0, settings);
   liveStart = performance.now();
 });
 
@@ -239,7 +241,7 @@ el('liveInput').addEventListener('keydown', (event) => {
 // drawStatic() and, if a recorder was active, running while teardown is
 // still in flight. Keeping 'mode' out avoids that race entirely.
 for (const id of [
-  'messages', 'typingEnabled', 'typingMs', 'msPerChar', 'gapMs', 'style',
+  'messages', 'typingEnabled', 'holdMs', 'msPerChar', 'gapMs', 'style',
   'senderName', 'aspect', 'leftBg', 'leftFg', 'rightBg', 'rightFg',
   'bgColor', 'transparent', 'fontSize', 'fontFamily',
 ]) {

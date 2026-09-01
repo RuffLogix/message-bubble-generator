@@ -35,13 +35,13 @@ R: ว่าง</textarea>
 
         <label class="field checkbox">
           <input type="checkbox" id="typingEnabled" checked />
-          <span>Typing animation</span>
+          <span>Typewriter animation</span>
         </label>
 
-        <label class="field"><span>Typing duration (ms)</span>
-          <input type="number" id="typingMs" value="900" min="0" max="10000" step="50" /></label>
-        <label class="field"><span>Milliseconds per character</span>
-          <input type="number" id="msPerChar" value="60" min="0" max="1000" step="5" /></label>
+        <label class="field"><span>Typing speed (ms per character)</span>
+          <input type="number" id="msPerChar" value="45" min="0" max="1000" step="5" /></label>
+        <label class="field"><span>Hold after typing (ms)</span>
+          <input type="number" id="holdMs" value="700" min="0" max="10000" step="50" /></label>
         <label class="field"><span>Gap between bubbles (ms)</span>
           <input type="number" id="gapMs" value="300" min="0" max="10000" step="50" /></label>
 
@@ -76,7 +76,7 @@ R: ว่าง</textarea>
         </label>
 
         <label class="field"><span>Font size (px)</span>
-          <input type="number" id="fontSize" value="44" min="12" max="200" step="1" /></label>
+          <input type="number" id="fontSize" value="34" min="12" max="200" step="1" /></label>
         <label class="field"><span>Font</span>
           <select id="fontFamily">
             <option value='system-ui, "IBM Plex Sans Thai", "Noto Sans Thai", sans-serif' selected>System</option>
