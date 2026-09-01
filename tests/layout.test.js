@@ -1,5 +1,5 @@
 import { test, eq, ok } from './assert.js';
-import { wrapText, measureBubble } from '../src/layout.js';
+import { wrapText, measureBubble, graphemes } from '../src/layout.js';
 
 function makeCtx() {
   const canvas = document.createElement('canvas');
@@ -79,4 +79,16 @@ test('wrapping a long unspaced Thai string does not split a base consonant from 
   for (const line of lines) {
     ok(!combiningMarks.has(line.codePointAt(0)), `line starts with a combining mark: ${JSON.stringify(line)}`);
   }
+});
+
+test('graphemes splits ASCII one character per entry', () => {
+  eq(graphemes('abc'), ['a', 'b', 'c']);
+});
+
+test('graphemes keeps a Thai base consonant and its mark together', () => {
+  eq(graphemes('วั'), ['วั']);
+});
+
+test('graphemes of an empty string is an empty list', () => {
+  eq(graphemes(''), []);
 });

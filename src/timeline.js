@@ -1,29 +1,19 @@
-export const HOLD_MIN_MS = 400;
-export const HOLD_MAX_MS = 4000;
+import { graphemes } from './layout.js';
 
-export function clampHold(ms) {
-  return Math.min(HOLD_MAX_MS, Math.max(HOLD_MIN_MS, ms));
-}
-
+// Builds the absolute-time schedule for a scripted conversation. Each message
+// types itself in one grapheme at a time, holds, then yields to the next.
 export function buildTimeline(messages, opts) {
-  const { msPerChar, typingMs, gapMs, typingEnabled } = opts;
+  const { msPerChar, holdMs, gapMs, typingEnabled } = opts;
   const items = [];
   let cursor = 0;
 
   messages.forEach((message, index) => {
-    let typingStart = null;
-    let typingEnd = null;
+    const typeStart = cursor;
+    const typeMs = typingEnabled ? graphemes(message.text).length * msPerChar : 0;
+    const typeEnd = typeStart + typeMs;
 
-    if (typingEnabled) {
-      typingStart = cursor;
-      typingEnd = cursor + typingMs;
-      cursor = typingEnd;
-    }
-
-    const appearAt = cursor;
-    items.push({ index, side: message.side, text: message.text, typingStart, typingEnd, appearAt });
-
-    cursor = appearAt + clampHold(message.text.length * msPerChar) + gapMs;
+    items.push({ index, side: message.side, text: message.text, typeStart, typeEnd });
+    cursor = typeEnd + holdMs + gapMs;
   });
 
   return { items, duration: cursor };
