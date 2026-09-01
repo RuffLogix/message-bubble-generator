@@ -1,5 +1,6 @@
 import { test, eq } from './assert.js';
 import { appendLive } from '../src/live.js';
+import { buildTimeline } from '../src/timeline.js';
 
 const OPTS = { msPerChar: 100, typingEnabled: true };
 
@@ -41,4 +42,12 @@ test('does not mutate the array it was given', () => {
   const first = appendLive([], { side: 'left', text: 'a' }, 0, OPTS);
   appendLive(first, { side: 'right', text: 'b' }, 5000, OPTS);
   eq(first.length, 1);
+});
+
+test('buildTimeline and appendLive items share the same shape', () => {
+  const message = { side: 'left', text: 'hi' };
+  const timelineOpts = { msPerChar: 100, holdMs: 700, gapMs: 300, typingEnabled: true };
+  const { items } = buildTimeline([message], timelineOpts);
+  const liveItems = appendLive([], message, 0, OPTS);
+  eq(Object.keys(items[0]).sort(), Object.keys(liveItems[0]).sort());
 });

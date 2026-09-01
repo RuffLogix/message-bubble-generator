@@ -1,5 +1,6 @@
 import { test, eq } from './assert.js';
 import { buildTimeline } from '../src/timeline.js';
+import { cameraTargetY } from '../src/renderer.js';
 
 const OPTS = { msPerChar: 100, holdMs: 700, gapMs: 300, typingEnabled: true };
 
@@ -57,4 +58,19 @@ test('a long message is not clamped', () => {
 
 test('empty message list yields no items and zero duration', () => {
   eq(buildTimeline([], OPTS), { items: [], duration: 0 });
+});
+
+const CAMERA_SETTINGS = { width: 1080, height: 1920, fontSize: 34 };
+// bottomPad = Math.round(1920 * 0.06) = 115
+
+test('cameraTargetY at zero content height', () => {
+  eq(cameraTargetY(0, CAMERA_SETTINGS), 1920 - 115 - 0);
+});
+
+test('cameraTargetY is positive when content is shorter than the stage', () => {
+  eq(cameraTargetY(500, CAMERA_SETTINGS), 1920 - 115 - 500);
+});
+
+test('cameraTargetY is negative when content is taller than the stage', () => {
+  eq(cameraTargetY(3000, CAMERA_SETTINGS), 1920 - 115 - 3000);
 });
