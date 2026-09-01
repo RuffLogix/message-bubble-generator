@@ -1,8 +1,16 @@
+function graphemesOf(word) {
+  if (typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function') {
+    const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+    return Array.from(segmenter.segment(word), (entry) => entry.segment);
+  }
+  return Array.from(word);
+}
+
 function breakLongWord(ctx, word, maxWidth) {
   const parts = [];
   let current = '';
 
-  for (const char of word) {
+  for (const char of graphemesOf(word)) {
     const candidate = current + char;
     if (current !== '' && ctx.measureText(candidate).width > maxWidth) {
       parts.push(current);

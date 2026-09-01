@@ -66,3 +66,17 @@ test('measureBubble height grows one lineHeight per line', () => {
   eq(many.height, 28 * many.lines.length + 32);
   ok(many.height > one.height, 'multi-line bubble should be taller');
 });
+
+test('wrapping a long unspaced Thai string does not split a base consonant from its combining mark', () => {
+  const ctx = makeCtx();
+  const text = 'สวัสดีครับวันนี้อากาศดีมากเลยนะครับผมสบายดีขอบคุณ';
+  const lines = wrapText(ctx, text, 10);
+  const combiningMarks = new Set([
+    0x0e31,
+    0x0e34, 0x0e35, 0x0e36, 0x0e37, 0x0e38, 0x0e39, 0x0e3a,
+    0x0e47, 0x0e48, 0x0e49, 0x0e4a, 0x0e4b, 0x0e4c, 0x0e4d, 0x0e4e,
+  ]);
+  for (const line of lines) {
+    ok(!combiningMarks.has(line.codePointAt(0)), `line starts with a combining mark: ${JSON.stringify(line)}`);
+  }
+});
