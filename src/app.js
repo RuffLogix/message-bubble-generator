@@ -168,6 +168,10 @@ el('reset').addEventListener('click', () => {
 });
 
 async function applyMode() {
+  // Clear any stale note from the previous mode before awaiting
+  // finishRecording(), so a fresh "Saved X MB." confirmation set by
+  // finishRecording() survives instead of being wiped immediately after.
+  note.textContent = '';
   if (activeRecorder) await finishRecording();
 
   const live = isLive();
@@ -178,7 +182,6 @@ async function applyMode() {
   // only Play/Reset; Record's own click handler branches on isLive().
   el('play').hidden = live;
   el('reset').hidden = live;
-  note.textContent = '';
 
   if (live) {
     liveItems = [];
@@ -226,18 +229,29 @@ el('liveInput').addEventListener('keydown', (event) => {
   event.target.value = '';
 });
 
+// 'mode' is intentionally NOT in this list. It has its own 'change' listener
+// (applyMode(), above) which already does everything this generic handler
+// would do for a mode switch, in the right order (finish/await any active
+// recording, then tear down or start the live loop). A <select> fires
+// 'input' before 'change', so including 'mode' here would let this handler's
+// live/script branches run against the *new* mode value before applyMode()
+// has torn down the *old* one — racing the live rAF loop against
+// drawStatic() and, if a recorder was active, running while teardown is
+// still in flight. Keeping 'mode' out avoids that race entirely.
 for (const id of [
   'messages', 'typingEnabled', 'typingMs', 'msPerChar', 'gapMs', 'style',
   'senderName', 'aspect', 'leftBg', 'leftFg', 'rightBg', 'rightFg',
-  'bgColor', 'transparent', 'fontSize', 'fontFamily', 'mode',
+  'bgColor', 'transparent', 'fontSize', 'fontFamily',
 ]) {
   el(id).addEventListener('input', () => {
     if (isLive()) {
       settings = readSettings();
-      // Skip the resize while a recorder is bound to the canvas: an `input`
-      // event on `mode` (switching away) or `aspect` fires before `change`,
-      // and resizing here would break the in-flight capture stream before
-      // applyMode()/finishRecording() gets a chance to finish it safely.
+      // Skip the resize while a recorder is bound to the canvas: 'aspect'
+      // fires 'input' with no corresponding teardown step (unlike 'mode',
+      // which now has none of this handler's live branch to race), so this
+      // guard still matters — resizing mid-recording would break the
+      // in-flight capture stream. Not dead code: still reachable via
+      // 'aspect' during a live recording.
       if (!activeRecorder) {
         canvas.width = settings.width;
         canvas.height = settings.height;
