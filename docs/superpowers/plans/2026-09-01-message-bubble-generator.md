@@ -1635,7 +1635,7 @@ git commit -m "feat: export the animation as a WebM file"
 - [ ] **Step 1: Run the unit tests**
 
 Open `http://localhost:8000/tests/tests.html?v=<unique>` — the server sends no cache headers, so always cache-bust.
-Expected: `34 passed, 0 failed` (2 harness + 8 parse + 8 timeline + 10 layout + 6 live).
+Expected: `35 passed, 0 failed` (2 harness + 8 parse + 8 timeline + 11 layout + 6 live).
 
 - [ ] **Step 2: Add a .gitignore**
 
@@ -2314,7 +2314,7 @@ export function appendLive(items, message, now, opts) {
 - [ ] **Step 6: Run the tests to verify they pass**
 
 Open `http://localhost:8000/tests/tests.html?v=<unique>`.
-Expected: `34 passed, 0 failed` (2 harness + 8 parse + 8 timeline + 10 layout + 6 live).
+Expected: `35 passed, 0 failed` (2 harness + 8 parse + 8 timeline + 11 layout + 6 live). The layout file has 8 tests before this task, not 7 — Task 4's grapheme fix round added one.
 
 - [ ] **Step 7: Commit**
 
@@ -2413,7 +2413,7 @@ Expected:
 4. A Thai message never flashes a base consonant separated from its tone mark mid-type.
 5. Once enough messages accumulate to fill the stage, the oldest scroll off the top and the newest stays in frame.
 6. Turning the typewriter off makes each bubble appear complete.
-7. `tests/tests.html?v=<unique>` still reads 34 passed, 0 failed.
+7. `tests/tests.html?v=<unique>` still reads 35 passed, 0 failed.
 
 - [ ] **Step 4: Commit**
 
@@ -2488,7 +2488,7 @@ Expected:
 4. The very first frame is already bottom-anchored — nothing slides up from the middle on load.
 5. Live mode still works: Enter types the bubble in, the stack grows upward, the side toggle and Tab still flip sides, Clear still empties it.
 6. Recording still produces a playable WebM in both modes.
-7. `tests/tests.html?v=<unique>` reads 34 passed, 0 failed.
+7. `tests/tests.html?v=<unique>` reads 35 passed, 0 failed.
 
 - [ ] **Step 4: Commit**
 
