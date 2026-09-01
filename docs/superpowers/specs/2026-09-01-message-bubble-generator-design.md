@@ -150,6 +150,24 @@ Manual verification, since this is a single-user visual tool with no build pipel
 
 A small parser test harness may be added as a plain HTML page that runs assertions and prints results, if the parser rules prove fiddly.
 
+## Addendum: Live typing mode (added 2026-09-01, after Task 5)
+
+The tool has two modes, chosen with a toggle at the top of the control panel.
+
+**Script mode** is everything described above: paste a message list, press Play, watch it animate from a precomputed timeline.
+
+**Live mode** is interactive. A single-line text box sits beside a Left/Right side toggle. Typing a message and pressing Enter drops that bubble onto the stack immediately; the previous bubbles stay where they are and the stack grows. Pressing Enter again adds the next bubble below. There is no Play button and no total duration — the animation is whatever the author types, as they type it.
+
+Live mode reuses the renderer unchanged. A live session is just a timeline built one item at a time: on each Enter, the message is stamped with the current session clock and appended to the item list. Because `renderFrame` is already a pure function of elapsed time over an item list, it does not know or care whether the list was precomputed or grown live.
+
+Typing behavior on Enter follows the same typing setting as script mode: when typing animation is on, the three-dot indicator plays for `typingMs` at the chosen side and the bubble appears after it; when off, the bubble appears at once.
+
+Side selection is a toggle button next to the input, also flipped by pressing Tab inside the input. The chosen side persists until flipped, so several messages in a row from the same speaker need no extra clicks.
+
+Recording in live mode is manual: press Record, type the conversation, press Stop, and the WebM downloads. Script mode keeps its existing behavior of stopping itself when playback ends.
+
+A Clear button empties the live stack and resets the camera.
+
 ## Out of Scope
 
 - Avatars and profile images.

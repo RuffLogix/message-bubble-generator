@@ -1630,10 +1630,12 @@ git commit -m "feat: export the animation as a WebM file"
 - Consumes: everything.
 - Produces: nothing new.
 
+**Run this task LAST**, after Tasks 10 and 11, so the checklist covers live mode too.
+
 - [ ] **Step 1: Run the unit tests**
 
 Open `http://localhost:8000/tests/tests.html`.
-Expected: `27 passed, 0 failed`.
+Expected: `34 passed, 0 failed` (28 after Task 4's grapheme fix, plus 6 from Task 10).
 
 - [ ] **Step 2: Run the manual checklist from the spec**
 
@@ -1643,6 +1645,16 @@ Work through the five items in the spec's Testing section:
 3. A long English sentence and a long unspaced Thai sentence both stay inside their bubbles.
 4. A twelve-message conversation keeps the newest bubble visible.
 5. A recorded file opens in a video editor and its frames match the preview.
+
+Then the live-mode items from the spec addendum:
+
+6. In Live mode, typing a message and pressing Enter shows the typing indicator, then drops the bubble; a second Enter stacks the next bubble below it without disturbing the first.
+7. The side toggle flips by click and by pressing Tab inside the input, and the chosen side persists across several messages.
+8. Turning typing animation off makes bubbles appear immediately on Enter, with no indicator.
+9. Enough live messages to overflow the stage keep the newest bubble in frame.
+10. Clear empties the stack and resets the camera.
+11. Record in Live mode runs until Stop is pressed and downloads a playable WebM; Record in Script mode still stops itself when playback ends.
+12. Switching modes back and forth leaves neither mode's animation running in the background.
 
 Fix any defect found before continuing. Note each fix in the commit message.
 
@@ -1669,6 +1681,393 @@ Append to `README.md`:
 ```bash
 git add README.md src/
 git commit -m "docs: record the manual verification checklist"
+```
+
+---
+
+### Task 10: Live session item list
+
+**Run this task after Task 8 and before Task 9.**
+
+**Files:**
+- Create: `src/live.js`
+- Create: `tests/live.test.js`
+- Modify: `tests/tests.html` (import the new test module)
+
+**Interfaces:**
+- Consumes: nothing from earlier tasks. Produces items in exactly the shape `src/timeline.js` produces, so `src/renderer.js` consumes them unchanged.
+- Produces: `appendLive(items, message, now, opts) => Array<TimelineItem>` where `message` is `{ side, text }`, `now` is milliseconds since the live session started, `opts` is `{ typingMs, typingEnabled }`, and `TimelineItem` is `{ index, side, text, typingStart, typingEnd, appearAt }`. Task 11 consumes it.
+
+- [ ] **Step 1: Write the failing tests**
+
+Create `tests/live.test.js`:
+
+```js
+import { test, eq } from './assert.js';
+import { appendLive } from '../src/live.js';
+
+const OPTS = { typingMs: 900, typingEnabled: true };
+
+test('appends one item carrying the side and text', () => {
+  const items = appendLive([], { side: 'right', text: 'hi' }, 1000, OPTS);
+  eq(items.length, 1);
+  eq(items[0].side, 'right');
+  eq(items[0].text, 'hi');
+});
+
+test('typing enabled stamps the typing window from now', () => {
+  const items = appendLive([], { side: 'left', text: 'hi' }, 1000, OPTS);
+  eq(items[0].typingStart, 1000);
+  eq(items[0].typingEnd, 1900);
+  eq(items[0].appearAt, 1900);
+});
+
+test('typing disabled appears immediately with no typing window', () => {
+  const items = appendLive([], { side: 'left', text: 'hi' }, 1000, { ...OPTS, typingEnabled: false });
+  eq(items[0].typingStart, null);
+  eq(items[0].typingEnd, null);
+  eq(items[0].appearAt, 1000);
+});
+
+test('index counts from zero and increments', () => {
+  const first = appendLive([], { side: 'left', text: 'a' }, 0, OPTS);
+  const second = appendLive(first, { side: 'right', text: 'b' }, 5000, OPTS);
+  eq(second[0].index, 0);
+  eq(second[1].index, 1);
+});
+
+test('appending keeps earlier items unchanged and in order', () => {
+  const first = appendLive([], { side: 'left', text: 'a' }, 0, OPTS);
+  const second = appendLive(first, { side: 'right', text: 'b' }, 5000, OPTS);
+  eq(second.length, 2);
+  eq(second[0].text, 'a');
+  eq(second[1].text, 'b');
+  eq(second[1].appearAt, 5900);
+});
+
+test('does not mutate the array it was given', () => {
+  const first = appendLive([], { side: 'left', text: 'a' }, 0, OPTS);
+  appendLive(first, { side: 'right', text: 'b' }, 5000, OPTS);
+  eq(first.length, 1);
+});
+```
+
+Add to `tests/tests.html`:
+
+```js
+      await import('./live.test.js');
+```
+
+- [ ] **Step 2: Run the tests to verify they fail**
+
+Open `http://localhost:8000/tests/tests.html`.
+Expected: console shows a 404 for `../src/live.js`.
+
+- [ ] **Step 3: Write the live module**
+
+Create `src/live.js`:
+
+```js
+// Appends one live-typed message to a session's item list, stamping its
+// times from the session clock. Returns a new array; the input is untouched.
+// The item shape matches src/timeline.js so src/renderer.js draws both the
+// same way.
+export function appendLive(items, message, now, opts) {
+  const { typingMs, typingEnabled } = opts;
+  const typingStart = typingEnabled ? now : null;
+  const typingEnd = typingEnabled ? now + typingMs : null;
+
+  return [
+    ...items,
+    {
+      index: items.length,
+      side: message.side,
+      text: message.text,
+      typingStart,
+      typingEnd,
+      appearAt: typingEnabled ? typingEnd : now,
+    },
+  ];
+}
+```
+
+- [ ] **Step 4: Run the tests to verify they pass**
+
+Open `http://localhost:8000/tests/tests.html`.
+Expected: `34 passed, 0 failed`.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/live.js tests/live.test.js tests/tests.html
+git commit -m "feat: stamp live-typed messages onto a growing item list"
+```
+
+---
+
+### Task 11: Live mode UI, loop, and manual recording
+
+**Run this task after Task 10 and before Task 9.**
+
+**Files:**
+- Modify: `index.html` (mode toggle and live controls)
+- Modify: `styles.css` (mode toggle and live row styling)
+- Modify: `src/app.js` (mode switching, live loop, Enter handling, manual record stop)
+
+**Interfaces:**
+- Consumes: `appendLive` from `src/live.js`; `renderFrame` and `cameraTargetY` from `src/renderer.js`; `readTiming()`, `readSettings()`, `rebuild()`, `play()`, `stop()`, and the module-scope `canvas`, `ctx`, `note`, `el`, `camera`, `settings`, `timeline` from `src/app.js`.
+- Produces: nothing consumed by a later task. Task 9 verifies it manually.
+
+- [ ] **Step 1: Add the mode toggle and live controls to the panel**
+
+In `index.html`, insert this block as the FIRST child of `<aside class="panel">`, immediately before the existing Messages field:
+
+```html
+        <label class="field"><span>Mode</span>
+          <select id="mode">
+            <option value="script" selected>Script — paste a list, press Play</option>
+            <option value="live">Live — type and press Enter</option>
+          </select></label>
+
+        <div id="liveControls" hidden>
+          <label class="field"><span>Type a message, press Enter</span>
+            <input type="text" id="liveInput" autocomplete="off" spellcheck="false" /></label>
+          <div class="live-row">
+            <button id="liveSide" type="button">Side: Left</button>
+            <button id="liveClear" type="button">Clear</button>
+          </div>
+          <p class="note">Tab inside the box flips the side.</p>
+        </div>
+```
+
+Then wrap the existing Messages field and the Play/Reset buttons so they can be hidden in live mode. Give the existing `<label class="field">` that contains `<textarea id="messages">` the id `scriptControls`:
+
+```html
+        <label class="field" id="scriptControls">
+          <span>Messages</span>
+```
+
+and give the existing `<div class="buttons">` the id `transport`:
+
+```html
+        <div class="buttons" id="transport">
+```
+
+Leave every other control (timing, style, colors, font, aspect) as it is — those apply to both modes.
+
+- [ ] **Step 2: Style the live row**
+
+Append to `styles.css`:
+
+```css
+.live-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.live-row button {
+  flex: 1;
+  padding: 8px;
+  font: inherit;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: canvas;
+  color: inherit;
+  cursor: pointer;
+}
+
+.live-row button:hover {
+  background: color-mix(in srgb, canvas 85%, var(--panel-fg));
+}
+```
+
+- [ ] **Step 3: Wire live mode in `src/app.js`**
+
+Add `appendLive` to the imports at the top of the file:
+
+```js
+import { appendLive } from './live.js';
+```
+
+Add this live-mode state and its loop after the existing script-mode state declarations (the block containing `let playing = false;`):
+
+```js
+let liveItems = [];
+let liveStart = 0;
+let liveRunning = false;
+let liveSide = 'left';
+
+function liveFrame(now) {
+  if (!liveRunning) return;
+  const dt = Math.min(64, now - lastFrame);
+  lastFrame = now;
+
+  const elapsed = now - liveStart;
+  const probe = renderFrame(ctx, { items: liveItems }, elapsed, { ...settings, cameraY: camera });
+  const target = cameraTargetY(probe.contentHeight, settings);
+  camera += (target - camera) * (1 - Math.exp(-dt / 120));
+
+  requestAnimationFrame(liveFrame);
+}
+
+function startLive() {
+  stop();
+  settings = readSettings();
+  canvas.width = settings.width;
+  canvas.height = settings.height;
+  liveStart = performance.now();
+  lastFrame = liveStart;
+  liveRunning = true;
+  requestAnimationFrame(liveFrame);
+}
+
+function stopLive() {
+  liveRunning = false;
+}
+
+function isLive() {
+  return el('mode').value === 'live';
+}
+```
+
+Add the mode switching and the live event handlers after the existing `el('reset')` listener:
+
+```js
+function applyMode() {
+  const live = isLive();
+  el('liveControls').hidden = !live;
+  el('scriptControls').hidden = live;
+  el('transport').hidden = live;
+  note.textContent = '';
+
+  if (live) {
+    liveItems = [];
+    camera = 0;
+    startLive();
+    el('liveInput').focus();
+  } else {
+    stopLive();
+    liveItems = [];
+    drawStatic();
+  }
+}
+
+el('mode').addEventListener('change', applyMode);
+
+el('liveSide').addEventListener('click', () => {
+  liveSide = liveSide === 'left' ? 'right' : 'left';
+  el('liveSide').textContent = liveSide === 'left' ? 'Side: Left' : 'Side: Right';
+});
+
+el('liveClear').addEventListener('click', () => {
+  liveItems = [];
+  camera = 0;
+  liveStart = performance.now();
+});
+
+el('liveInput').addEventListener('keydown', (event) => {
+  if (event.key === 'Tab') {
+    event.preventDefault();
+    el('liveSide').click();
+    return;
+  }
+  if (event.key !== 'Enter') return;
+
+  event.preventDefault();
+  const text = event.target.value.trim();
+  if (text === '') return;
+
+  liveItems = appendLive(
+    liveItems,
+    { side: liveSide, text },
+    performance.now() - liveStart,
+    readTiming(),
+  );
+  event.target.value = '';
+});
+```
+
+Change the settings-input listener loop so it does not fight the live loop, and so a live session picks up canvas-size changes. Replace its body with:
+
+```js
+  el(id).addEventListener('input', () => {
+    if (isLive()) {
+      settings = readSettings();
+      canvas.width = settings.width;
+      canvas.height = settings.height;
+      return;
+    }
+    if (!playing) drawStatic();
+  });
+```
+
+Add `'mode'` to that same id list so switching aspect or colors mid-session still applies.
+
+Finally, replace the bottom `drawStatic();` bootstrap call with:
+
+```js
+applyMode();
+```
+
+- [ ] **Step 4: Make recording manual in live mode**
+
+In the Record button's click handler in `src/app.js`, replace the `rebuild()` / empty-check / `play()` sequence so script mode behaves as before and live mode simply records the running loop:
+
+```js
+  if (isLive()) {
+    activeRecorder = createRecorder(canvas, mimeType, 60);
+    activeRecorder.start();
+    recordButton.textContent = 'Stop';
+    note.textContent = 'Recording… press Stop when finished.';
+    el('liveInput').focus();
+    return;
+  }
+
+  rebuild();
+  if (timeline.items.length === 0) {
+    note.textContent = 'Message list is empty.';
+    return;
+  }
+
+  activeRecorder = createRecorder(canvas, mimeType, 60);
+  activeRecorder.start();
+  recordButton.textContent = 'Stop';
+  note.textContent = 'Recording…';
+  play();
+```
+
+Guard the auto-stop so it only fires in script mode:
+
+```js
+document.addEventListener('playback-ended', () => {
+  if (!activeRecorder || isLive()) return;
+  setTimeout(finishRecording, 400);
+});
+```
+
+- [ ] **Step 5: Verify live mode**
+
+Open `http://localhost:8000/index.html`.
+Expected:
+1. Mode starts on Script and behaves exactly as before — the message list, Play, and Reset all still work.
+2. Switching to Live hides the message list and the Play/Reset buttons, shows the input and the side toggle, and clears the stage.
+3. Typing `สวัสดี` and pressing Enter shows typing dots on the left, then the bubble.
+4. A second message stacks below the first without moving it.
+5. Clicking the side toggle switches it to `Side: Right`; the next Enter puts the bubble on the right.
+6. Pressing Tab inside the input flips the side without moving focus out of the box.
+7. Turning off typing animation makes the next Enter show the bubble immediately.
+8. Enough messages to fill the stage make the camera ease upward, keeping the newest bubble visible.
+9. Clear empties the stage.
+10. Record starts recording and keeps going while you type; Stop downloads a playable WebM.
+11. Switching back to Script and pressing Play animates the list normally, and the live loop is no longer running.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add index.html styles.css src/app.js
+git commit -m "feat: add live typing mode with side toggle and manual recording"
 ```
 
 ---
