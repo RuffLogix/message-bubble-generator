@@ -49,6 +49,14 @@ body {
 #canvas {
   max-width: 100%;
   max-height: 100%;
+  /* Grid items default to min-height/min-width:auto, which floors them at
+     their own content size — for a canvas that "content size" is its
+     unconstrained backing-store size. That floor wins over max-height:100%
+     whenever the stage is shorter than the canvas would naturally render,
+     so the canvas overflows/gets clipped instead of scaling down. Zeroing
+     the auto minimums lets max-width/max-height actually do the shrinking. */
+  min-width: 0;
+  min-height: 0;
   box-shadow: 0 8px 32px rgb(0 0 0 / 0.4);
 }
 
@@ -61,6 +69,13 @@ body {
   .panel {
     border-right: none;
     border-bottom: 1px solid var(--border);
+  }
+  /* .app's height goes auto above so the panel can grow with its content,
+     but that leaves the stage row without a definite height to hand down —
+     #canvas's max-height:100% (and the min-height:0 fix above) both need
+     something concrete to resolve against. */
+  .stage {
+    height: 70vh;
   }
 }
 
