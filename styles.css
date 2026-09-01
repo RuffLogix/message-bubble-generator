@@ -149,3 +149,30 @@ body {
   min-height: 1.4em;
   opacity: 0.8;
 }
+
+#scriptControls[hidden],
+#liveControls[hidden] {
+  display: none;
+}
+
+.live-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.live-row button {
+  flex: 1;
+  padding: 8px;
+  font: inherit;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: canvas;
+  color: inherit;
+  cursor: pointer;
+}
+
+.live-row button:hover {
+  background: color-mix(in srgb, canvas 85%, var(--panel-fg));
+}

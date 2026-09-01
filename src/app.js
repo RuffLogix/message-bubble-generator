@@ -2,6 +2,7 @@ import { parseMessages } from './parse.js';
 import { buildTimeline } from './timeline.js';
 import { renderFrame, cameraTargetY } from './renderer.js';
 import { pickMimeType, createRecorder, downloadBlob } from './recorder.js';
+import { appendLive } from './live.js';
 
 const el = (id) => document.getElementById(id);
 const canvas = el('canvas');
@@ -57,6 +58,43 @@ let playing = false;
 let startedAt = 0;
 let camera = 0;
 let lastFrame = 0;
+
+let liveItems = [];
+let liveStart = 0;
+let liveRunning = false;
+let liveSide = 'left';
+
+function liveFrame(now) {
+  if (!liveRunning) return;
+  const dt = Math.min(64, now - lastFrame);
+  lastFrame = now;
+
+  const elapsed = now - liveStart;
+  const probe = renderFrame(ctx, { items: liveItems }, elapsed, { ...settings, cameraY: camera });
+  const target = cameraTargetY(probe.contentHeight, settings);
+  camera += (target - camera) * (1 - Math.exp(-dt / 120));
+
+  requestAnimationFrame(liveFrame);
+}
+
+function startLive() {
+  stop();
+  settings = readSettings();
+  canvas.width = settings.width;
+  canvas.height = settings.height;
+  liveStart = performance.now();
+  lastFrame = liveStart;
+  liveRunning = true;
+  requestAnimationFrame(liveFrame);
+}
+
+function stopLive() {
+  liveRunning = false;
+}
+
+function isLive() {
+  return el('mode').value === 'live';
+}
 
 function rebuild() {
   settings = readSettings();
@@ -129,20 +167,89 @@ el('reset').addEventListener('click', () => {
   drawStatic();
 });
 
+async function applyMode() {
+  if (activeRecorder) await finishRecording();
+
+  const live = isLive();
+  el('liveControls').hidden = !live;
+  el('scriptControls').hidden = live;
+  // #transport wraps Play, Reset, AND Record — hiding the whole row would
+  // also hide Record, which must stay reachable in live mode (Step 4). Hide
+  // only Play/Reset; Record's own click handler branches on isLive().
+  el('play').hidden = live;
+  el('reset').hidden = live;
+  note.textContent = '';
+
+  if (live) {
+    liveItems = [];
+    camera = 0;
+    startLive();
+    el('liveInput').focus();
+  } else {
+    stopLive();
+    liveItems = [];
+    drawStatic();
+  }
+}
+
+el('mode').addEventListener('change', applyMode);
+
+el('liveSide').addEventListener('click', () => {
+  liveSide = liveSide === 'left' ? 'right' : 'left';
+  el('liveSide').textContent = liveSide === 'left' ? 'Side: Left' : 'Side: Right';
+});
+
+el('liveClear').addEventListener('click', () => {
+  liveItems = [];
+  camera = 0;
+  liveStart = performance.now();
+});
+
+el('liveInput').addEventListener('keydown', (event) => {
+  if (event.key === 'Tab') {
+    event.preventDefault();
+    el('liveSide').click();
+    return;
+  }
+  if (event.key !== 'Enter') return;
+
+  event.preventDefault();
+  const text = event.target.value.trim();
+  if (text === '') return;
+
+  liveItems = appendLive(
+    liveItems,
+    { side: liveSide, text },
+    performance.now() - liveStart,
+    readTiming(),
+  );
+  event.target.value = '';
+});
+
 for (const id of [
   'messages', 'typingEnabled', 'typingMs', 'msPerChar', 'gapMs', 'style',
   'senderName', 'aspect', 'leftBg', 'leftFg', 'rightBg', 'rightFg',
-  'bgColor', 'transparent', 'fontSize', 'fontFamily',
+  'bgColor', 'transparent', 'fontSize', 'fontFamily', 'mode',
 ]) {
   el(id).addEventListener('input', () => {
+    if (isLive()) {
+      settings = readSettings();
+      // Skip the resize while a recorder is bound to the canvas: an `input`
+      // event on `mode` (switching away) or `aspect` fires before `change`,
+      // and resizing here would break the in-flight capture stream before
+      // applyMode()/finishRecording() gets a chance to finish it safely.
+      if (!activeRecorder) {
+        canvas.width = settings.width;
+        canvas.height = settings.height;
+      }
+      return;
+    }
     if (!playing) {
       note.textContent = '';
       drawStatic();
     }
   });
 }
-
-drawStatic();
 
 const recordButton = el('record');
 const mimeType = pickMimeType();
@@ -170,6 +277,15 @@ recordButton.addEventListener('click', async () => {
     return;
   }
 
+  if (isLive()) {
+    activeRecorder = createRecorder(canvas, mimeType, 60);
+    activeRecorder.start();
+    recordButton.textContent = 'Stop';
+    note.textContent = 'Recording… press Stop when finished.';
+    el('liveInput').focus();
+    return;
+  }
+
   rebuild();
   if (timeline.items.length === 0) {
     note.textContent = 'Message list is empty.';
@@ -188,6 +304,8 @@ recordButton.addEventListener('click', async () => {
 });
 
 document.addEventListener('playback-ended', () => {
-  if (!activeRecorder) return;
+  if (!activeRecorder || isLive()) return;
   setTimeout(finishRecording, 400);
 });
+
+applyMode();
