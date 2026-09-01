@@ -1630,20 +1630,24 @@ git commit -m "feat: export the animation as a WebM file"
 - Consumes: everything.
 - Produces: nothing new.
 
-**Run this task LAST**, after Tasks 10 and 11, so the checklist covers live mode too.
+**Run this task LAST**, after Task 14, so the checklist covers live mode and the typewriter too.
 
 - [ ] **Step 1: Run the unit tests**
 
-Open `http://localhost:8000/tests/tests.html`.
-Expected: `34 passed, 0 failed` (28 after Task 4's grapheme fix, plus 6 from Task 10).
+Open `http://localhost:8000/tests/tests.html?v=<unique>` — the server sends no cache headers, so always cache-bust.
+Expected: `34 passed, 0 failed` (2 harness + 8 parse + 8 timeline + 10 layout + 6 live).
 
-- [ ] **Step 2: Run the manual checklist from the spec**
+- [ ] **Step 2: Add a .gitignore**
 
-Work through the five items in the spec's Testing section:
+The repository has none, and an untracked `.DS_Store` has been sitting in the working tree. Create `.gitignore` containing `.DS_Store`, and remove the stray file.
+
+- [ ] **Step 3: Run the manual checklist from the spec**
+
+Work through the core items:
 1. Parser cases through the real textarea — prefixed, unprefixed continuation, blank lines, prefix-only lines, mixed case.
-2. A one-character message and a 200-character message both respect the 400ms and 4000ms clamps.
-3. A long English sentence and a long unspaced Thai sentence both stay inside their bubbles.
-4. A twelve-message conversation keeps the newest bubble visible.
+2. Typing pace: a 5-character message at 100ms per character takes about half a second to type; a 200-character message is not clamped and simply takes proportionally longer.
+3. A long English sentence and a long unspaced Thai sentence both stay inside their bubbles, and neither flashes a broken Thai glyph while typing.
+4. A twelve-message conversation keeps the newest bubble visible, with the oldest scrolling off the top.
 5. A recorded file opens in a video editor and its frames match the preview.
 
 Then the live-mode items from the spec addendum:
@@ -1655,6 +1659,14 @@ Then the live-mode items from the spec addendum:
 10. Clear empties the stack and resets the camera.
 11. Record in Live mode runs until Stop is pressed and downloads a playable WebM; Record in Script mode still stops itself when playback ends.
 12. Switching modes back and forth leaves neither mode's animation running in the background.
+
+Then the typewriter and anchoring items from spec addendum 2:
+
+13. No three-dot indicator appears anywhere, in either mode.
+14. Text types in one character at a time and the bubble grows to fit as it does.
+15. The first bubble sits at the bottom of the stage on the very first frame, with nothing sliding up into place on load.
+16. Each new bubble eases the stack upward.
+17. Turning the typewriter off makes bubbles appear complete, in both modes.
 
 Fix any defect found before continuing. Note each fix in the commit message.
 
@@ -2068,6 +2080,421 @@ Expected:
 ```bash
 git add index.html styles.css src/app.js
 git commit -m "feat: add live typing mode with side toggle and manual recording"
+```
+
+---
+
+### Task 12: Typewriter timing model
+
+**Run this task after Task 11 and before Task 13.** It supersedes Task 3's timing rules and Task 10's item shape.
+
+**Files:**
+- Modify: `src/layout.js` (export the grapheme splitter)
+- Modify: `src/timeline.js` (typewriter timing, remove the hold clamp)
+- Modify: `src/live.js` (same item shape as the new timeline)
+- Modify: `tests/layout.test.js`, `tests/timeline.test.js`, `tests/live.test.js`
+
+**Interfaces:**
+- Consumes: nothing new.
+- Produces:
+  - `graphemes(text) => string[]` from `src/layout.js` — splits by grapheme cluster via `Intl.Segmenter`, falling back to `Array.from`. `breakLongWord` already has this logic privately; expose it and have `breakLongWord` call the exported version so there is one implementation.
+  - `buildTimeline(messages, opts) => { items, duration }` where `opts` is `{ msPerChar, holdMs, gapMs, typingEnabled }` and each item is `{ index, side, text, typeStart, typeEnd }`.
+  - `appendLive(items, message, now, opts) => Array<Item>` producing the same item shape.
+  - `HOLD_MIN_MS`, `HOLD_MAX_MS`, and `clampHold` are DELETED. So are the item fields `typingStart`, `typingEnd`, and `appearAt`. Task 13 consumes `typeStart`/`typeEnd`.
+
+- [ ] **Step 1: Rewrite the three test files**
+
+Replace the whole of `tests/timeline.test.js`:
+
+```js
+import { test, eq } from './assert.js';
+import { buildTimeline } from '../src/timeline.js';
+
+const OPTS = { msPerChar: 100, holdMs: 700, gapMs: 300, typingEnabled: true };
+
+test('typing runs one msPerChar per grapheme', () => {
+  const { items } = buildTimeline([{ side: 'left', text: 'abcde' }], OPTS);
+  eq(items[0].typeStart, 0);
+  eq(items[0].typeEnd, 500);
+});
+
+test('typing disabled makes the bubble appear complete', () => {
+  const { items } = buildTimeline(
+    [{ side: 'left', text: 'abcde' }],
+    { ...OPTS, typingEnabled: false },
+  );
+  eq(items[0].typeStart, 0);
+  eq(items[0].typeEnd, 0);
+});
+
+test('a Thai combining mark does not cost its own character time', () => {
+  // 'วั' is two code points but one grapheme cluster.
+  const { items } = buildTimeline([{ side: 'left', text: 'วั' }], OPTS);
+  eq(items[0].typeEnd, 100);
+});
+
+test('the next message starts after typing, hold, and gap', () => {
+  const { items } = buildTimeline(
+    [
+      { side: 'left', text: 'abcde' },
+      { side: 'right', text: 'xy' },
+    ],
+    OPTS,
+  );
+  // first: type 0..500, hold to 1200, gap to 1500
+  eq(items[1].typeStart, 1500);
+  eq(items[1].typeEnd, 1700);
+});
+
+test('items carry index, side, and text', () => {
+  const { items } = buildTimeline([{ side: 'right', text: 'hi' }], OPTS);
+  eq(items[0].index, 0);
+  eq(items[0].side, 'right');
+  eq(items[0].text, 'hi');
+});
+
+test('duration covers the last hold and the trailing gap', () => {
+  const { duration } = buildTimeline([{ side: 'left', text: 'abcde' }], OPTS);
+  eq(duration, 500 + 700 + 300);
+});
+
+test('a long message is not clamped', () => {
+  const text = 'a'.repeat(200);
+  const { items } = buildTimeline([{ side: 'left', text }], OPTS);
+  eq(items[0].typeEnd, 20000);
+});
+
+test('empty message list yields no items and zero duration', () => {
+  eq(buildTimeline([], OPTS), { items: [], duration: 0 });
+});
+```
+
+Replace the whole of `tests/live.test.js`:
+
+```js
+import { test, eq } from './assert.js';
+import { appendLive } from '../src/live.js';
+
+const OPTS = { msPerChar: 100, typingEnabled: true };
+
+test('appends one item carrying the side and text', () => {
+  const items = appendLive([], { side: 'right', text: 'hi' }, 1000, OPTS);
+  eq(items.length, 1);
+  eq(items[0].side, 'right');
+  eq(items[0].text, 'hi');
+});
+
+test('typing starts now and runs one msPerChar per grapheme', () => {
+  const items = appendLive([], { side: 'left', text: 'abcde' }, 1000, OPTS);
+  eq(items[0].typeStart, 1000);
+  eq(items[0].typeEnd, 1500);
+});
+
+test('typing disabled makes the bubble appear complete', () => {
+  const items = appendLive([], { side: 'left', text: 'abcde' }, 1000, { ...OPTS, typingEnabled: false });
+  eq(items[0].typeStart, 1000);
+  eq(items[0].typeEnd, 1000);
+});
+
+test('index counts from zero and increments', () => {
+  const first = appendLive([], { side: 'left', text: 'a' }, 0, OPTS);
+  const second = appendLive(first, { side: 'right', text: 'b' }, 5000, OPTS);
+  eq(second[0].index, 0);
+  eq(second[1].index, 1);
+});
+
+test('appending keeps earlier items unchanged and in order', () => {
+  const first = appendLive([], { side: 'left', text: 'a' }, 0, OPTS);
+  const second = appendLive(first, { side: 'right', text: 'bb' }, 5000, OPTS);
+  eq(second.length, 2);
+  eq(second[0].text, 'a');
+  eq(second[1].typeEnd, 5200);
+});
+
+test('does not mutate the array it was given', () => {
+  const first = appendLive([], { side: 'left', text: 'a' }, 0, OPTS);
+  appendLive(first, { side: 'right', text: 'b' }, 5000, OPTS);
+  eq(first.length, 1);
+});
+```
+
+Append to `tests/layout.test.js`:
+
+```js
+test('graphemes splits ASCII one character per entry', () => {
+  eq(graphemes('abc'), ['a', 'b', 'c']);
+});
+
+test('graphemes keeps a Thai base consonant and its mark together', () => {
+  eq(graphemes('วั'), ['วั']);
+});
+
+test('graphemes of an empty string is an empty list', () => {
+  eq(graphemes(''), []);
+});
+```
+
+and add `graphemes` to that file's existing import from `../src/layout.js`.
+
+- [ ] **Step 2: Run the tests to verify they fail**
+
+Open `http://localhost:8000/tests/tests.html?v=<unique>`.
+Expected: failures — `graphemes` is not exported, and the timeline and live tests assert fields that do not exist yet.
+
+- [ ] **Step 3: Export the grapheme splitter**
+
+In `src/layout.js`, change the private grapheme helper into an export and have `breakLongWord` use it, so there is exactly one implementation:
+
+```js
+export function graphemes(text) {
+  if (typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function') {
+    const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+    return Array.from(segmenter.segment(text), (s) => s.segment);
+  }
+  return Array.from(text);
+}
+```
+
+Keep `wrapText` and `measureBubble` exactly as they are apart from `breakLongWord` now calling `graphemes`.
+
+- [ ] **Step 4: Rewrite the timeline**
+
+Replace the whole of `src/timeline.js`:
+
+```js
+import { graphemes } from './layout.js';
+
+// Builds the absolute-time schedule for a scripted conversation. Each message
+// types itself in one grapheme at a time, holds, then yields to the next.
+export function buildTimeline(messages, opts) {
+  const { msPerChar, holdMs, gapMs, typingEnabled } = opts;
+  const items = [];
+  let cursor = 0;
+
+  messages.forEach((message, index) => {
+    const typeStart = cursor;
+    const typeMs = typingEnabled ? graphemes(message.text).length * msPerChar : 0;
+    const typeEnd = typeStart + typeMs;
+
+    items.push({ index, side: message.side, text: message.text, typeStart, typeEnd });
+    cursor = typeEnd + holdMs + gapMs;
+  });
+
+  return { items, duration: cursor };
+}
+```
+
+- [ ] **Step 5: Rewrite the live stamper**
+
+Replace the whole of `src/live.js`:
+
+```js
+import { graphemes } from './layout.js';
+
+// Appends one live-typed message to a session's item list, stamping its times
+// from the session clock. Returns a new array; the input is untouched. The item
+// shape matches src/timeline.js so src/renderer.js draws both the same way.
+export function appendLive(items, message, now, opts) {
+  const { msPerChar, typingEnabled } = opts;
+  const typeMs = typingEnabled ? graphemes(message.text).length * msPerChar : 0;
+
+  return [
+    ...items,
+    {
+      index: items.length,
+      side: message.side,
+      text: message.text,
+      typeStart: now,
+      typeEnd: now + typeMs,
+    },
+  ];
+}
+```
+
+- [ ] **Step 6: Run the tests to verify they pass**
+
+Open `http://localhost:8000/tests/tests.html?v=<unique>`.
+Expected: `34 passed, 0 failed` (2 harness + 8 parse + 8 timeline + 10 layout + 6 live).
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add src/layout.js src/timeline.js src/live.js tests/
+git commit -m "feat: replace the typing indicator with a per-grapheme typewriter schedule"
+```
+
+---
+
+### Task 13: Typewriter rendering and bottom-anchored stack
+
+**Run this task after Task 12 and before Task 14.**
+
+**Files:**
+- Modify: `src/renderer.js`
+
+**Interfaces:**
+- Consumes: `graphemes` and `measureBubble` from `src/layout.js`; items shaped `{ index, side, text, typeStart, typeEnd }`.
+- Produces: `renderFrame(ctx, timeline, elapsed, settings)` and `cameraTargetY(contentHeight, settings)`, both keeping their existing signatures. `settings.typingMs` is no longer read.
+
+This task has no unit tests; verification is visual.
+
+- [ ] **Step 1: Reveal text by grapheme instead of drawing dots**
+
+In `src/renderer.js`, add `graphemes` to the existing import from `./layout.js`.
+
+Add this helper above `layoutScene`:
+
+```js
+// How much of an item's text is on screen at `elapsed`. A bubble is never
+// empty: once typing starts, at least the first grapheme shows.
+function visibleText(item, elapsed) {
+  if (elapsed >= item.typeEnd) return item.text;
+
+  const parts = graphemes(item.text);
+  const span = item.typeEnd - item.typeStart;
+  const progress = span <= 0 ? 1 : (elapsed - item.typeStart) / span;
+  const shown = Math.max(1, Math.ceil(progress * parts.length));
+  return parts.slice(0, shown).join('');
+}
+```
+
+Replace the body of `layoutScene`'s loop. Delete the `typing` branch, the `typing` box kind, and the whole `drawTypingDots` function — the three-dot indicator is gone. The loop becomes:
+
+```js
+  for (const item of timeline.items) {
+    if (elapsed < item.typeStart) break;
+
+    const text = visibleText(item, elapsed);
+    const measured = measureBubble(ctx, text, m);
+    const progress = Math.min(1, (elapsed - item.typeStart) / APPEAR_MS);
+    boxes.push({
+      kind: 'bubble',
+      side: item.side,
+      x: 0,
+      y,
+      width: measured.width,
+      height: measured.height,
+      lines: measured.lines,
+      progress,
+      item,
+    });
+    y += measured.height + m.gutter;
+  }
+```
+
+In `renderFrame`'s drawing loop, delete the `if (box.kind === 'typing')` branch and always draw the text path.
+
+- [ ] **Step 2: Anchor the stack to the bottom**
+
+Replace `cameraTargetY`:
+
+```js
+// The stack hangs from the bottom of the stage: positive while the content is
+// short, negative once it outgrows the frame and the top must scroll away.
+export function cameraTargetY(contentHeight, settings) {
+  const m = metricsFor(settings);
+  return settings.height - m.bottomPad - contentHeight;
+}
+```
+
+In `renderFrame`, change the camera translate from `ctx.translate(0, m.bottomPad + (settings.cameraY ?? 0));` back to:
+
+```js
+  ctx.translate(0, settings.cameraY ?? 0);
+```
+
+- [ ] **Step 3: Verify visually**
+
+Open `http://localhost:8000/index.html?v=<unique>`.
+Expected:
+1. In Script mode, pressing Play types each message in character by character, and the bubble grows as it fills — no three-dot indicator anywhere.
+2. The first bubble sits at the BOTTOM of the stage, not the top.
+3. Each new bubble pushes the stack upward, and the movement eases rather than jumping.
+4. A Thai message never flashes a base consonant separated from its tone mark mid-type.
+5. Once enough messages accumulate to fill the stage, the oldest scroll off the top and the newest stays in frame.
+6. Turning the typewriter off makes each bubble appear complete.
+7. `tests/tests.html?v=<unique>` still reads 34 passed, 0 failed.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add src/renderer.js
+git commit -m "feat: type bubbles in by grapheme and anchor the stack to the bottom"
+```
+
+---
+
+### Task 14: Panel settings for the typewriter
+
+**Run this task after Task 13 and before Task 9.**
+
+**Files:**
+- Modify: `index.html`
+- Modify: `src/app.js`
+
+**Interfaces:**
+- Consumes: everything above.
+- Produces: `readTiming()` returning `{ msPerChar, holdMs, gapMs, typingEnabled }`.
+
+This task has no unit tests; verification is visual.
+
+- [ ] **Step 1: Update the panel fields**
+
+In `index.html`:
+
+- Change the typing checkbox label text from `Typing animation` to `Typewriter animation`. Keep the id `typingEnabled`.
+- DELETE the whole `Typing duration (ms)` field, including its `<input id="typingMs">`.
+- Change the `Milliseconds per character` label to `Typing speed (ms per character)` and its default `value` from `60` to `45`. Keep the id `msPerChar`.
+- ADD a field immediately after it:
+
+```html
+        <label class="field"><span>Hold after typing (ms)</span>
+          <input type="number" id="holdMs" value="700" min="0" max="10000" step="50" /></label>
+```
+
+- Change the `Font size (px)` input's default `value` from `44` to `34`. Keep the id `fontSize`.
+- Update the live-mode helper text if it mentions a typing indicator.
+
+- [ ] **Step 2: Update the wiring**
+
+In `src/app.js`:
+
+- In `readTiming()`, drop the `typingMs` line and add `holdMs`:
+
+```js
+function readTiming() {
+  return {
+    msPerChar: num('msPerChar', 0, 1000, 45),
+    holdMs: num('holdMs', 0, 10000, 700),
+    gapMs: num('gapMs', 0, 10000, 300),
+    typingEnabled: el('typingEnabled').checked,
+  };
+}
+```
+
+- In `readSettings()`, change the `fontSize` fallback from `44` to `34`.
+- In the settings-input id list, replace `'typingMs'` with `'holdMs'`.
+- Wherever the camera is initialised for a fresh render — `drawStatic()`, `play()`, `applyMode()`, and the live Clear handler — set `camera` directly to `cameraTargetY(...)` for the first frame rather than starting it at `0`, so the opening frame is already bottom-anchored instead of sliding up into place.
+
+Leave everything else alone, including the Play re-entrancy guard, the conditional canvas resize, the note clearing, the Record `if (playing)` guard, and the live-mode branches.
+
+- [ ] **Step 3: Verify**
+
+Open `http://localhost:8000/index.html?v=<unique>`.
+Expected:
+1. The panel shows `Typewriter animation`, `Typing speed (ms per character)` defaulting to 45, `Hold after typing (ms)` defaulting to 700, and no `Typing duration` field.
+2. Font size defaults to 34 and the bubbles are visibly smaller than before.
+3. Script mode plays with the typewriter at the new defaults; raising the typing speed number visibly slows typing.
+4. The very first frame is already bottom-anchored — nothing slides up from the middle on load.
+5. Live mode still works: Enter types the bubble in, the stack grows upward, the side toggle and Tab still flip sides, Clear still empties it.
+6. Recording still produces a playable WebM in both modes.
+7. `tests/tests.html?v=<unique>` reads 34 passed, 0 failed.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add index.html src/app.js
+git commit -m "feat: expose typewriter speed and hold, shrink default text"
 ```
 
 ---

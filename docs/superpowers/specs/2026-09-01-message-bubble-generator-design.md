@@ -168,6 +168,22 @@ Recording in live mode is manual: press Record, type the conversation, press Sto
 
 A Clear button empties the live stack and resets the camera.
 
+## Addendum 2: Typewriter text and bottom-anchored stack (added 2026-09-02)
+
+The author supplied a reference recording. It changes three things that the original design got wrong, and they supersede the corresponding parts of the sections above.
+
+**Typewriter instead of a typing indicator.** A bubble appears already containing its first character, and the rest of the text types in one character at a time while the bubble grows to fit. There is no three-dot indicator; it is removed, not made optional. Typing duration is therefore derived from the text — `graphemeCount * msPerChar` — rather than being a fixed setting, and the `typingMs` setting disappears.
+
+Characters are revealed by grapheme cluster, not by code point, for the same reason wrapping breaks by grapheme: revealing a Thai base consonant and its tone mark on separate frames would flash a broken glyph.
+
+**Timing model.** Each message runs: type for `graphemeCount * msPerChar` (zero when the typewriter is off, so the bubble appears complete), hold for a fixed `holdMs`, then wait `gapMs` before the next message begins. The old length-derived hold and its 400–4000ms clamp are removed — with a typewriter, length already drives duration, and clamping it twice made the pacing unpredictable.
+
+**Bottom-anchored stack.** The bubble column is anchored to the bottom of the stage from the very first message, not to the top. Each new bubble pushes the stack upward, and the movement eases. This replaces the earlier "start at the top, scroll only once content overflows" behavior; the camera target becomes a single uniform expression with no overflow branch, positive while the content is short and negative once it exceeds the frame.
+
+**Smaller default text.** The reference sets its bubbles at roughly 1.7% of frame height. The default font size drops from 44 to 34 at 1080×1920. It remains adjustable.
+
+Both sides are kept. The reference uses only the left side, but the side toggle costs nothing and the author wants it available.
+
 ## Out of Scope
 
 - Avatars and profile images.
