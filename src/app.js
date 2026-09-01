@@ -59,8 +59,8 @@ let lastFrame = 0;
 
 function rebuild() {
   settings = readSettings();
-  canvas.width = settings.width;
-  canvas.height = settings.height;
+  if (canvas.width !== settings.width) canvas.width = settings.width;
+  if (canvas.height !== settings.height) canvas.height = settings.height;
   timeline = buildTimeline(parseMessages(el('messages').value), readTiming());
 }
 
@@ -85,6 +85,7 @@ function frame(now) {
   if (elapsed >= timeline.duration) {
     playing = false;
     el('play').textContent = 'Play';
+    el('play').disabled = false;
     document.dispatchEvent(new CustomEvent('playback-ended'));
     return;
   }
@@ -92,14 +93,18 @@ function frame(now) {
 }
 
 export function play() {
+  if (playing) return false;
   rebuild();
   if (timeline.items.length === 0) {
     note.textContent = 'Message list is empty.';
+    el('play').disabled = false;
+    renderFrame(ctx, timeline, 0, { ...settings, cameraY: 0 });
     return false;
   }
   note.textContent = '';
   camera = 0;
   playing = true;
+  el('play').disabled = true;
   startedAt = performance.now();
   lastFrame = startedAt;
   el('play').textContent = 'Playing…';
@@ -110,11 +115,13 @@ export function play() {
 export function stop() {
   playing = false;
   el('play').textContent = 'Play';
+  el('play').disabled = false;
 }
 
 el('play').addEventListener('click', play);
 el('reset').addEventListener('click', () => {
   stop();
+  note.textContent = '';
   drawStatic();
 });
 
@@ -124,7 +131,10 @@ for (const id of [
   'bgColor', 'transparent', 'fontSize', 'fontFamily',
 ]) {
   el(id).addEventListener('input', () => {
-    if (!playing) drawStatic();
+    if (!playing) {
+      note.textContent = '';
+      drawStatic();
+    }
   });
 }
 
