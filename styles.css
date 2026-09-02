@@ -1,9 +1,15 @@
 :root {
   color-scheme: light dark;
-  --panel-bg: #f4f4f5;
+  --panel-bg: #f7f7f8;
   --panel-fg: #18181b;
   --stage-bg: #27272a;
   --border: #d4d4d8;
+  /* Accent derived from the default chroma-key green (#00B140), darkened
+     until white text on it passes AA. */
+  --accent: #0b7a3a;
+  --accent-hover: #086330;
+  --danger: #d92d20;
+  --chroma: #00b140;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -12,6 +18,9 @@
     --panel-fg: #f4f4f5;
     --stage-bg: #09090b;
     --border: #3f3f46;
+    --accent: #12934a;
+    --accent-hover: #17a854;
+    --danger: #ef4444;
   }
 }
 
@@ -25,6 +34,11 @@ body {
   color: var(--panel-fg);
 }
 
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 .app {
   display: grid;
   grid-template-columns: 340px 1fr;
@@ -35,7 +49,42 @@ body {
   background: var(--panel-bg);
   border-right: 1px solid var(--border);
   overflow-y: auto;
-  padding: 16px;
+  /* No padding-bottom: a sticky child's bottom:0 resolves against the
+     scrollport's padding box, so any padding here parks .transport that many
+     pixels above the panel's bottom edge and leaves a strip where scrolling
+     fields show through under the bar. .transport supplies its own bottom
+     padding instead. */
+  padding: 16px 16px 0;
+}
+
+.panel-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.panel-head h1 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.panel-head p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  opacity: 0.65;
+}
+
+.chroma-dot {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  margin-top: 3px;
+  border-radius: 4px;
+  background: var(--chroma);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--chroma) 22%, transparent);
 }
 
 .stage {
@@ -79,10 +128,58 @@ body {
   }
 }
 
+.group {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.group > h2 {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.55;
+}
+
+.grid {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.grid-2 {
+  grid-template-columns: 1fr 1fr;
+}
+
+.grid-3 {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+/* Three labels in a 340px panel: let them shrink rather than wrap, so the
+   inputs below them stay on one baseline. */
+.grid-3 .field > span {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.font-row {
+  grid-template-columns: 1.6fr 1fr;
+}
+
+.grid .field {
+  margin-bottom: 0;
+}
+
 .field {
   display: block;
   margin-bottom: 12px;
   font-size: 13px;
+}
+
+.field[hidden] {
+  display: none;
 }
 
 .field > span {
@@ -104,14 +201,69 @@ body {
   color: inherit;
 }
 
+/* A select, a text input, and a color input resolve different intrinsic
+   heights from identical padding (31 / 29 / 30px), so the two-up rows —
+   Font / Size, and the bubble colour pairs — sat on mismatched baselines.
+   Pinning one height puts every control on the same line. */
+.field select,
+.field input:not([type='checkbox']) {
+  height: 32px;
+}
+
+.field input[type='number'] {
+  font-variant-numeric: tabular-nums;
+}
+
 .field textarea {
   resize: vertical;
   line-height: 1.5;
 }
 
-.field input[type='color'] {
-  height: 32px;
+/* A full-width colour input reads as an empty text field when the colour is
+   white and as a redaction bar when it is black. Pair a small chip with its
+   label instead, so the row says what it is and the chip only carries the
+   colour. */
+.field.swatch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 4px 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: canvas;
+}
+
+.field.swatch > span {
+  margin: 0;
+  opacity: 1;
+}
+
+.field.swatch input[type='color'] {
+  flex: none;
+  width: 30px;
+  height: 22px;
   padding: 2px;
+  border-radius: 5px;
+}
+
+.field input[type='color'] {
+  padding: 3px;
+  cursor: pointer;
+}
+
+.field input[type='color']::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.field input[type='color']::-webkit-color-swatch {
+  border: 1px solid color-mix(in srgb, var(--panel-fg) 25%, transparent);
+  border-radius: 3px;
+}
+
+.field input[type='color']::-moz-color-swatch {
+  border: 1px solid color-mix(in srgb, var(--panel-fg) 25%, transparent);
+  border-radius: 3px;
 }
 
 .field.checkbox {
@@ -122,20 +274,31 @@ body {
 
 .field.checkbox input {
   width: auto;
+  accent-color: var(--accent);
 }
 
 .field.checkbox > span {
   margin: 0;
 }
 
+.transport {
+  position: sticky;
+  bottom: 0;
+  /* Bleed across .panel's 16px side padding so scrolled fields can't peek
+     out beside the sticky bar. */
+  margin: 16px -16px 0;
+  background: var(--panel-bg);
+  padding: 10px 16px 16px;
+  border-top: 1px solid var(--border);
+}
+
 .buttons {
   display: flex;
   gap: 8px;
-  margin-top: 16px;
-  position: sticky;
-  bottom: 0;
-  background: var(--panel-bg);
-  padding: 8px 0;
+}
+
+.transport .note {
+  margin: 8px 0 0;
 }
 
 .buttons button {
@@ -157,6 +320,54 @@ body {
 .buttons button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+#play {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+#play:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+#record::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: var(--danger);
+  vertical-align: 1px;
+}
+
+#record.recording {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+#record.recording:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 85%, black);
+}
+
+#record.recording::before {
+  background: #fff;
+  animation: rec-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes rec-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #record.recording::before {
+    animation: none;
+  }
 }
 
 .note {

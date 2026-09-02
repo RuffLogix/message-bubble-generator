@@ -325,6 +325,7 @@ async function finishRecording() {
   const recorder = activeRecorder;
   activeRecorder = null;
   recordButton.textContent = 'Record';
+  recordButton.classList.remove('recording');
   const blob = await recorder.stop();
   downloadBlob(blob, 'message-bubbles.webm');
   note.textContent = `Saved ${(blob.size / 1_000_000).toFixed(1)} MB.`;
@@ -341,6 +342,7 @@ recordButton.addEventListener('click', async () => {
     activeRecorder = createRecorder(canvas, mimeType, 60);
     activeRecorder.start();
     recordButton.textContent = 'Stop';
+    recordButton.classList.add('recording');
     note.textContent = 'Recording… press Stop when finished.';
     el('liveInput').focus();
     return;
@@ -359,6 +361,7 @@ recordButton.addEventListener('click', async () => {
   activeRecorder = createRecorder(canvas, mimeType, 60);
   activeRecorder.start();
   recordButton.textContent = 'Stop';
+  recordButton.classList.add('recording');
   note.textContent = 'Recording…';
   play();
 });
@@ -367,5 +370,13 @@ document.addEventListener('playback-ended', () => {
   if (!activeRecorder || isLive()) return;
   setTimeout(finishRecording, 400);
 });
+
+// The renderer only draws a sender name in the LINE style; hide the field in
+// the other styles so the panel doesn't offer a control that does nothing.
+function syncSenderNameVisibility() {
+  el('senderNameField').hidden = el('style').value !== 'line';
+}
+el('style').addEventListener('input', syncSenderNameVisibility);
+syncSenderNameVisibility();
 
 applyMode();

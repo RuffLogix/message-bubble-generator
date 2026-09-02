@@ -32,17 +32,22 @@ Both modes feed the same renderer, so they look identical.
 
 ## Settings
 
-| Setting | What it does |
-| --- | --- |
-| Typewriter animation | Off makes each bubble appear complete, with no reveal |
-| Typing speed | Milliseconds per grapheme; total type time is `graphemes × this`, uncapped |
-| Hold after typing | Pause once a message is fully typed |
-| Gap between bubbles | Pause before the next message starts typing |
-| Style | `iMessage` (pill + tail), `LINE` (rounded, optional sender name), `Flat` |
-| Aspect ratio | 9:16 (1080×1920), 1:1 (1080×1080), or 16:9 (1920×1080) |
-| Colours | Per-side bubble and text colour, plus the background key colour |
-| Transparent | Skips the background fill so the WebM carries alpha instead of a key colour |
-| Font | Size in output pixels, and the family |
+The panel groups the controls under **Timing**, **Appearance**, and
+**Colors**, with Play, Reset, and Record pinned to the bottom.
+
+| Setting | Group | What it does |
+| --- | --- | --- |
+| Typewriter animation | Timing | Off makes each bubble appear complete, with no reveal |
+| Speed (ms/char) | Timing | Milliseconds per grapheme; total type time is `graphemes × this`, uncapped |
+| Hold (ms) | Timing | Pause once a message is fully typed |
+| Gap (ms) | Timing | Pause before the next message starts typing |
+| Style | Appearance | `iMessage` (pill + tail), `LINE` (rounded, optional sender name), `Minimal` |
+| Sender name | Appearance | Drawn above left-side bubbles; only the LINE style renders it, so the field appears only for that style |
+| Aspect ratio | Appearance | 9:16 (1080×1920), 1:1 (1080×1080), or 16:9 (1920×1080) |
+| Font | Appearance | The family, and the size in output pixels |
+| Bubble and text colours | Colors | Per-side bubble and text colour |
+| Stage background | Colors | The background key colour |
+| Transparent | Colors | Skips the background fill so the WebM carries alpha instead of a key colour |
 
 ## Running
 
@@ -58,9 +63,9 @@ you the stale page.
 
 ## Recording
 
-Press Record. In Script mode the recording stops itself when playback ends; in
-Live mode it runs until you press Stop. The file downloads as WebM at the
-selected resolution.
+Press Record. The button turns red and reads Stop while capture is running. In
+Script mode the recording stops itself when playback ends; in Live mode it runs
+until you press Stop. The file downloads as WebM at the selected resolution.
 
 ## Tests
 

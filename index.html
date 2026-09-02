@@ -4,11 +4,20 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Message Bubble Generator</title>
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%2300B140'/%3E%3Cpath d='M4 4.5h8a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H7.5L5 11.5V9.5H4a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1z' fill='white'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="styles.css?v=7" />
   </head>
   <body>
     <main class="app">
       <aside class="panel">
+        <header class="panel-head">
+          <span class="chroma-dot" aria-hidden="true"></span>
+          <div>
+            <h1>Message Bubble Generator</h1>
+            <p>Animate a chat, key it over your video.</p>
+          </div>
+        </header>
+
         <label class="field"><span>Mode</span>
           <select id="mode">
             <option value="script" selected>Script — paste a list, press Play</option>
@@ -27,75 +36,90 @@
 
         <label class="field" id="scriptControls">
           <span>Messages</span>
-          <textarea id="messages" rows="10" spellcheck="false">L: สวัสดีครับ
+          <textarea id="messages" rows="7" spellcheck="false">L: สวัสดีครับ
 R: ว่าไง
 L: วันนี้ว่างมั้ย
 R: ว่าง</textarea>
         </label>
 
-        <label class="field checkbox">
-          <input type="checkbox" id="typingEnabled" checked />
-          <span>Typewriter animation</span>
-        </label>
+        <section class="group">
+          <h2>Timing</h2>
+          <label class="field checkbox">
+            <input type="checkbox" id="typingEnabled" checked />
+            <span>Typewriter animation</span>
+          </label>
+          <div class="grid grid-3">
+            <label class="field"><span>Speed (ms/char)</span>
+              <input type="number" id="msPerChar" value="45" min="0" max="1000" step="5" /></label>
+            <label class="field"><span>Hold (ms)</span>
+              <input type="number" id="holdMs" value="700" min="0" max="10000" step="50" /></label>
+            <label class="field"><span>Gap (ms)</span>
+              <input type="number" id="gapMs" value="300" min="0" max="10000" step="50" /></label>
+          </div>
+        </section>
 
-        <label class="field"><span>Typing speed (ms per character)</span>
-          <input type="number" id="msPerChar" value="45" min="0" max="1000" step="5" /></label>
-        <label class="field"><span>Hold after typing (ms)</span>
-          <input type="number" id="holdMs" value="700" min="0" max="10000" step="50" /></label>
-        <label class="field"><span>Gap between bubbles (ms)</span>
-          <input type="number" id="gapMs" value="300" min="0" max="10000" step="50" /></label>
+        <section class="group">
+          <h2>Appearance</h2>
+          <label class="field"><span>Style</span>
+            <select id="style">
+              <option value="imessage" selected>iMessage</option>
+              <option value="line">LINE</option>
+              <option value="minimal">Minimal</option>
+            </select></label>
+          <label class="field" id="senderNameField"><span>Sender name</span>
+            <input type="text" id="senderName" value="" /></label>
+          <label class="field"><span>Aspect ratio</span>
+            <select id="aspect">
+              <option value="9:16" selected>9:16 — 1080×1920</option>
+              <option value="1:1">1:1 — 1080×1080</option>
+              <option value="16:9">16:9 — 1920×1080</option>
+            </select></label>
+          <div class="grid font-row">
+            <label class="field"><span>Font</span>
+              <select id="fontFamily">
+                <option value='system-ui, "IBM Plex Sans Thai", "Noto Sans Thai", sans-serif' selected>System</option>
+                <option value='"IBM Plex Sans Thai", "Noto Sans Thai", system-ui, sans-serif'>Plex Sans Thai</option>
+                <option value='"Noto Sans Thai", system-ui, sans-serif'>Noto Sans Thai</option>
+                <option value='ui-monospace, "JetBrains Mono", monospace'>Monospace</option>
+              </select></label>
+            <label class="field"><span>Size (px)</span>
+              <input type="number" id="fontSize" value="34" min="12" max="200" step="1" /></label>
+          </div>
+        </section>
 
-        <label class="field"><span>Style</span>
-          <select id="style">
-            <option value="imessage" selected>iMessage</option>
-            <option value="line">LINE</option>
-            <option value="minimal">Minimal</option>
-          </select></label>
-        <label class="field"><span>Sender name (LINE style)</span>
-          <input type="text" id="senderName" value="" /></label>
-        <label class="field"><span>Aspect ratio</span>
-          <select id="aspect">
-            <option value="9:16" selected>9:16 — 1080×1920</option>
-            <option value="1:1">1:1 — 1080×1080</option>
-            <option value="16:9">16:9 — 1920×1080</option>
-          </select></label>
+        <section class="group">
+          <h2>Colors</h2>
+          <div class="grid grid-2">
+            <label class="field swatch"><span>Left bubble</span>
+              <input type="color" id="leftBg" value="#FFFFFF" /></label>
+            <label class="field swatch"><span>Left text</span>
+              <input type="color" id="leftFg" value="#000000" /></label>
+            <label class="field swatch"><span>Right bubble</span>
+              <input type="color" id="rightBg" value="#FFFFFF" /></label>
+            <label class="field swatch"><span>Right text</span>
+              <input type="color" id="rightFg" value="#000000" /></label>
+          </div>
+          <label class="field swatch"><span>Stage background</span>
+            <input type="color" id="bgColor" value="#00B140" /></label>
+          <label class="field checkbox">
+            <input type="checkbox" id="transparent" />
+            <span>Transparent background (experimental)</span>
+          </label>
+        </section>
 
-        <label class="field"><span>Left bubble background</span>
-          <input type="color" id="leftBg" value="#FFFFFF" /></label>
-        <label class="field"><span>Left bubble text</span>
-          <input type="color" id="leftFg" value="#000000" /></label>
-        <label class="field"><span>Right bubble background</span>
-          <input type="color" id="rightBg" value="#FFFFFF" /></label>
-        <label class="field"><span>Right bubble text</span>
-          <input type="color" id="rightFg" value="#000000" /></label>
-        <label class="field"><span>Stage background</span>
-          <input type="color" id="bgColor" value="#00B140" /></label>
-        <label class="field checkbox">
-          <input type="checkbox" id="transparent" />
-          <span>Transparent background (experimental)</span>
-        </label>
-
-        <label class="field"><span>Font size (px)</span>
-          <input type="number" id="fontSize" value="34" min="12" max="200" step="1" /></label>
-        <label class="field"><span>Font</span>
-          <select id="fontFamily">
-            <option value='system-ui, "IBM Plex Sans Thai", "Noto Sans Thai", sans-serif' selected>System</option>
-            <option value='"IBM Plex Sans Thai", "Noto Sans Thai", system-ui, sans-serif'>Plex Sans Thai</option>
-            <option value='"Noto Sans Thai", system-ui, sans-serif'>Noto Sans Thai</option>
-            <option value='ui-monospace, "JetBrains Mono", monospace'>Monospace</option>
-          </select></label>
-
-        <div class="buttons" id="transport">
-          <button id="play" type="button">Play</button>
-          <button id="reset" type="button">Reset</button>
-          <button id="record" type="button">Record</button>
+        <div class="transport" id="transport">
+          <div class="buttons">
+            <button id="play" type="button">Play</button>
+            <button id="reset" type="button">Reset</button>
+            <button id="record" type="button">Record</button>
+          </div>
+          <p class="note" id="note"></p>
         </div>
-        <p class="note" id="note"></p>
       </aside>
       <section class="stage" id="stage">
         <canvas id="canvas"></canvas>
       </section>
     </main>
-    <script type="module" src="src/app.js"></script>
+    <script type="module" src="src/app.js?v=3"></script>
   </body>
 </html>
