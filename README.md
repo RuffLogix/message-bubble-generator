@@ -38,9 +38,12 @@ The panel groups the controls under **Timing**, **Appearance**, and
 | Setting | Group | What it does |
 | --- | --- | --- |
 | Typewriter animation | Timing | Off makes each bubble appear complete, with no reveal |
+| Humanize (%) | Timing | Unevenness in the typing: keys land early or late, with a beat after punctuation and the odd hesitation. 0 is a perfectly regular reveal. The message still finishes at the same moment either way |
 | Speed (ms/char) | Timing | Milliseconds per grapheme; total type time is `graphemes × this`, uncapped |
 | Hold (ms) | Timing | Pause once a message is fully typed |
 | Gap (ms) | Timing | Pause before the next message starts typing |
+| Typing sound | Timing | Plays a synthesised keyboard click per grapheme, and muxes it into the recording |
+| Volume | Timing | 0–100, applied to the clicks; 0 is silent |
 | Style | Appearance | `iMessage` (pill + tail), `LINE` (rounded, optional sender name), `Minimal` |
 | Sender name | Appearance | Drawn above left-side bubbles; only the LINE style renders it, so the field appears only for that style |
 | Aspect ratio | Appearance | 9:16 (1080×1920), 1:1 (1080×1080), or 16:9 (1920×1080) |
@@ -67,14 +70,21 @@ Press Record. The button turns red and reads Stop while capture is running. In
 Script mode the recording stops itself when playback ends; in Live mode it runs
 until you press Stop. The file downloads as WebM at the selected resolution.
 
+With **Typing sound** ticked the WebM also carries an Opus audio track of the
+clicks. With it unticked the file has no audio track at all, rather than a
+silent one. The clicks are scheduled from the same elapsed time the renderer
+draws from, so they land on the frames their characters appear on — what you
+hear in the preview is what ends up in the file.
+
 ## Tests
 
 Open <http://localhost:8000/tests/tests.html>. The page runs the unit tests for
-the parser, the timeline, live-mode item building, and text
-measurement/wrapping, then prints `N passed, M failed` plus one line per test.
+the parser, the timeline, live-mode item building, text measurement/wrapping,
+the reveal curve, and the typing-sound click schedule, then prints
+`N passed, M failed` plus one line per test.
 
-Rendering, camera movement, and WebM export have no automated coverage by
-design; they are verified by hand against the checklist below.
+Rendering, camera movement, audio synthesis, and WebM export have no automated
+coverage by design; they are verified by hand against the checklist below.
 
 ## Manual checks before shipping a change
 
@@ -117,6 +127,20 @@ design; they are verified by hand against the checklist below.
 17. In iMessage style, the tail stays welded to the bubble at every message
     length, including a one-character bubble and a bubble wide enough to
     reach the wrap width.
+18. Typing sound: with the box ticked, clicks are audible during playback and
+    during live typing, and land with the characters rather than trailing
+    them. Volume 0 is silent. Unticking it hides the volume field.
+19. Typing sound in the export: a WebM recorded with the box ticked carries an
+    Opus track whose clicks line up with the typing; one recorded with it
+    unticked carries no audio track at all. Record twice in a row with sound
+    on — the second file must still have audio.
+20. Humanize: at 0 the reveal is perfectly regular; at 40 keys land unevenly,
+    with a beat after punctuation. Either way the message finishes at the same
+    moment, and the clicks stay on the characters. Turning the typewriter off
+    hides the field.
+21. Replay determinism: play the same script twice at the same Humanize, and
+    the characters land on the same frames both times — no flicker of a
+    grapheme appearing and vanishing.
 
 ## Architecture
 

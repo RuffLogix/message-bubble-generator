@@ -21,7 +21,7 @@ Drive both pages with the Playwright MCP browser tools. Since this is a canvas a
 
 **Running one test:** there is no filter mechanism. `tests/tests.html` imports each `*.test.js` module in sequence; comment out the other imports to isolate a file, or just read the named `PASS`/`FAIL` line for the test you care about. `tests/assert.js` provides `test(name, fn)`, `eq(actual, expected)`, `ok(value)`, and `report(el)`; `eq` compares by `JSON.stringify`, so it is a deep compare.
 
-Only pure logic is unit-tested — parsing, timing, layout/wrapping, live item building. Rendering, camera, recording, and the UI have **no automated coverage by design**; they are covered by the 15-point manual checklist in `README.md`, which should be worked through before shipping a visual change.
+Only pure logic is unit-tested — parsing, timing, layout/wrapping, live item building, the reveal curve, and the typing-sound click schedule. Rendering, camera, audio synthesis, recording, and the UI have **no automated coverage by design**; they are covered by the 21-point manual checklist in `README.md`, which should be worked through before shipping a visual change.
 
 ## What this is
 
@@ -35,10 +35,10 @@ Design history lives in `docs/superpowers/specs/` and `docs/superpowers/plans/`.
 ## Architecture
 
 ```
-parse.js  ─┐
-           ├─→  {index, side, text, typeStart, typeEnd}  ─→  renderer.js  ─→  canvas
-timeline.js┤                                                      ↑
-live.js   ─┘                                                   app.js  ─→  recorder.js
+parse.js  ─┐                                          ┌─→ renderer.js ─→ canvas
+           ├─→ {index, side, text, typeStart, typeEnd}┤      ↑
+timeline.js┤                             typing.js ───┤   app.js ─→ recorder.js
+live.js   ─┘                          (reveal curve)  └─→ sound.js  ─→ clicks
 ```
 
 `app.js` is the only module that touches the DOM. Everything under it is pure or canvas-only.
@@ -54,6 +54,22 @@ live.js   ─┘                                                   app.js  ─�
 **Text is always handled by grapheme cluster, never by code point.** `graphemes()` in `layout.js` is the single implementation (`Intl.Segmenter`, falling back to `Array.from`). Both wrapping (`breakLongWord`) and the typewriter reveal (`visibleText`) call it. Thai combining vowels and tone marks are separate code points; slicing with `String.prototype.slice` or `[...text]` would flash a base consonant without its mark. There are tests guarding this — do not "simplify" them away.
 
 **The camera formula is deliberately unbranched.** `cameraTargetY` returns `height - bottomPad - contentHeight` — positive while the stack is short (hanging it off the bottom), negative once it outgrows the frame (scrolling the top away). Adding a `Math.max(0, ...)` or an overflow branch breaks bottom anchoring. `renderFrame` translates by `cameraY` alone; re-adding a `bottomPad +` prefix double-counts the padding.
+
+**`typing.js` owns the reveal curve, and it is the only owner.** `revealedCount(item, elapsed, humanize)` answers "how much of this message is on screen at time T". `visibleText()` in `renderer.js` draws what it returns and `clicksBetween()` in `sound.js` clicks off it, so a keystroke's sound cannot drift away from its character — there is only one answer to derive. These used to be two copies of the same formula. Do not re-inline it into either caller.
+
+**The humanized reveal must stay deterministic.** `humanize` (0..1, from `settings`) jitters the per-grapheme dwell so typing isn't metronomic. The jitter is *hashed* from `item.index` and the grapheme's position, never sampled from `Math.random()`: the render loop asks the same question several times a frame and again on replay, so a sampled value would make graphemes flicker in and out and stop a recording from matching its preview.
+
+**Humanizing redistributes time, it never adds any.** The dwell weights are normalised to mean 1, so a message still finishes exactly at the `typeEnd` `buildTimeline` computed. That is what keeps the timeline, its tests, and the no-clamp timing model below untouched. If you add a weight term, keep the normalisation.
+
+**The typing sound is derived from the clock, not scheduled.** `clicksBetween(items, from, to, humanize)` in `sound.js` returns the graphemes struck in a half-open window; both rAF loops advance that window each frame and hand the result to `TypingSound.play()`. `from` starts at `-1`, not `0`, so the first keystroke — which lands exactly at `typeStart` — is heard. Do not move sound into the renderer (it must stay canvas-only) and do not schedule clicks with `setTimeout`.
+
+**The audio track is cloned into the capture stream, never adopted.** `recorder.stop()` stops every track on the stream. The click audio comes from a `MediaStreamDestination` that lives for the whole page, so `createRecorder` clones its track — stopping the original would silence every subsequent recording. There is a manual check for this (record twice with sound on).
+
+**`pickMimeType(withAudio)` is called per recording, not once at load.** The container has to declare an Opus track exactly when one is being muxed; the checkbox can change between takes. Sound off means *no audio track at all*, not a muted one.
+
+**The two sound controls are absent from the settings-input listener id list, on purpose.** They change nothing the renderer draws, so that listener's repaint would be wasted, and `readSettings()` has no field for them. They have their own `syncSound()` listeners; `readSound()` is separate from `readSettings()`.
+
+**`recordButton.disabled` is toggled around `openRecording()`.** It awaits the AudioContext resume, so `activeRecorder` is assigned a tick later than it used to be; without the disable, a second click inside that window sails past the `if (activeRecorder)` guard and starts a second recording.
 
 **Timing model.** Type for `graphemeCount * msPerChar`, hold `holdMs`, wait `gapMs`. There is no clamp on duration — length already drives it, and clamping on top made pacing unpredictable. Do not reintroduce one.
 

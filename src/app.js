@@ -3,6 +3,7 @@ import { buildTimeline } from './timeline.js';
 import { renderFrame, cameraTargetY } from './renderer.js';
 import { pickMimeType, createRecorder, downloadBlob } from './recorder.js';
 import { appendLive } from './live.js';
+import { clicksBetween, TypingSound } from './sound.js';
 
 const el = (id) => document.getElementById(id);
 const canvas = el('canvas');
@@ -51,6 +52,13 @@ function readTiming() {
   };
 }
 
+function readSound() {
+  return {
+    enabled: el('soundEnabled').checked,
+    volume: num('soundVolume', 0, 100, 60) / 100,
+  };
+}
+
 function readSettings() {
   const [width, height] = ASPECTS[el('aspect').value];
   return {
@@ -63,6 +71,9 @@ function readSettings() {
     leftFg: el('leftFg').value,
     rightBg: el('rightBg').value,
     rightFg: el('rightFg').value,
+    // Reaches renderFrame as part of settings rather than riding on the items,
+    // so the one-item-shape-two-producers contract stays exactly as it was.
+    humanize: num('humanize', 0, 100, 40) / 100,
     fontSize: num('fontSize', 12, 200, 34),
     fontFamily: el('fontFamily').value,
     senderName: el('senderName').value,
@@ -82,12 +93,46 @@ let liveStart = 0;
 let liveRunning = false;
 let liveSide = 'left';
 
+// Typing sound. The schedule comes from clicksBetween() — a pure function of
+// the same elapsed time the renderer draws from — so a recording hears exactly
+// what the preview heard, for the same reason it looks exactly like it.
+// Nothing here is scheduled with setTimeout.
+const typingSound = new TypingSound();
+let sound = readSound();
+// Exclusive lower bound of the next click window. Starts before zero so the
+// very first keystroke, which lands exactly at typeStart, is heard.
+let lastSoundAt = -1;
+
+// A frame that reveals a burst of graphemes (a long first frame, a tab
+// regaining focus) would otherwise dump the whole backlog at once. Excess
+// clicks are dropped, not queued: lastSoundAt advances to the true elapsed
+// either way, so the sound stays in step with the picture instead of lagging.
+const MAX_CLICKS_PER_FRAME = 4;
+
+function emitClicks(items, elapsed) {
+  if (!sound.enabled) {
+    lastSoundAt = elapsed;
+    return;
+  }
+  const struck = clicksBetween(items, lastSoundAt, elapsed, settings.humanize);
+  lastSoundAt = elapsed;
+  if (struck.length > 0) typingSound.play(struck.slice(0, MAX_CLICKS_PER_FRAME));
+}
+
+// Browsers keep an AudioContext suspended until a user gesture, and a
+// suspended context feeds the recorder a silent track. Every entry point that
+// can start audio is a click or a keypress, so resuming there is safe.
+function resumeSound() {
+  if (sound.enabled) typingSound.resume();
+}
+
 function liveFrame(now) {
   if (!liveRunning) return;
   const dt = Math.min(64, now - lastFrame);
   lastFrame = now;
 
   const elapsed = now - liveStart;
+  emitClicks(liveItems, elapsed);
   const probe = renderFrame(ctx, { items: liveItems }, elapsed, { ...settings, cameraY: camera });
   const target = cameraTargetY(probe.contentHeight, settings);
   camera += (target - camera) * (1 - Math.exp(-dt / 120));
@@ -103,7 +148,9 @@ function startLive() {
   canvas.height = settings.height;
   liveStart = performance.now();
   lastFrame = liveStart;
+  lastSoundAt = -1;
   liveRunning = true;
+  resumeSound();
   requestAnimationFrame(liveFrame);
 }
 
@@ -139,6 +186,7 @@ function frame(now) {
   lastFrame = now;
 
   const elapsed = now - startedAt;
+  emitClicks(timeline.items, elapsed);
   const probe = renderFrame(ctx, timeline, elapsed, { ...settings, cameraY: camera });
   const target = cameraTargetY(probe.contentHeight, settings);
   camera += (target - camera) * (1 - Math.exp(-dt / 120));
@@ -169,6 +217,8 @@ export function play() {
   el('play').disabled = true;
   startedAt = performance.now();
   lastFrame = startedAt;
+  lastSoundAt = -1;
+  resumeSound();
   el('play').textContent = 'Playing…';
   requestAnimationFrame(frame);
   return true;
@@ -227,6 +277,7 @@ el('liveClear').addEventListener('click', () => {
   liveItems = [];
   camera = cameraTargetY(0, settings);
   liveStart = performance.now();
+  lastSoundAt = -1;
 });
 
 el('liveInput').addEventListener('keydown', (event) => {
@@ -241,6 +292,7 @@ el('liveInput').addEventListener('keydown', (event) => {
   const text = event.target.value.trim();
   if (text === '') return;
 
+  resumeSound();
   liveItems = appendLive(
     liveItems,
     { side: liveSide, text },
@@ -260,7 +312,7 @@ el('liveInput').addEventListener('keydown', (event) => {
 // drawStatic() and, if a recorder was active, running while teardown is
 // still in flight. Keeping 'mode' out avoids that race entirely.
 for (const id of [
-  'messages', 'typingEnabled', 'holdMs', 'msPerChar', 'gapMs', 'style',
+  'messages', 'typingEnabled', 'humanize', 'holdMs', 'msPerChar', 'gapMs', 'style',
   'senderName', 'aspect', 'leftBg', 'leftFg', 'rightBg', 'rightFg',
   'bgColor', 'transparent', 'fontSize', 'fontFamily',
 ]) {
@@ -305,19 +357,54 @@ const NUMERIC_FIELDS = {
   msPerChar: [0, 1000, 45],
   holdMs: [0, 10000, 700],
   gapMs: [0, 10000, 300],
+  humanize: [0, 100, 40],
+  soundVolume: [0, 100, 60],
 };
 for (const [id, [min, max, fallback]] of Object.entries(NUMERIC_FIELDS)) {
   el(id).addEventListener('change', () => normalizeNumberInput(id, min, max, fallback));
   el(id).addEventListener('blur', () => normalizeNumberInput(id, min, max, fallback));
 }
 
+// The sound controls are deliberately NOT in the settings-input list above.
+// They change nothing the renderer draws, so the repaint that listener does
+// would be wasted work, and readSettings() has no field to carry them.
+function syncSound() {
+  sound = readSound();
+  typingSound.setVolume(sound.volume);
+  el('soundVolumeField').hidden = !sound.enabled;
+}
+el('soundEnabled').addEventListener('change', () => {
+  syncSound();
+  resumeSound();
+});
+el('soundVolume').addEventListener('input', syncSound);
+syncSound();
+
 const recordButton = el('record');
-const mimeType = pickMimeType();
 let activeRecorder = null;
 
-if (!mimeType) {
+if (!pickMimeType()) {
   recordButton.disabled = true;
   recordButton.title = 'This browser cannot record WebM. Screen record the preview instead.';
+}
+
+// Resolves the capture stream and container for one recording. The mime type
+// is chosen per recording, not once at load: it has to declare an Opus track
+// exactly when there is one to mux, and the checkbox can change between takes.
+// A browser with no AudioContext yields a null stream, which silently falls
+// back to a video-only recording rather than failing the take.
+async function openRecording() {
+  let audioStream = null;
+  if (sound.enabled) {
+    await typingSound.resume();
+    audioStream = typingSound.captureStream();
+  }
+  const mimeType = pickMimeType(Boolean(audioStream));
+  const recorder = createRecorder(canvas, mimeType, 60, audioStream);
+  recorder.start();
+  recordButton.textContent = 'Stop';
+  recordButton.classList.add('recording');
+  return recorder;
 }
 
 async function finishRecording() {
@@ -339,10 +426,16 @@ recordButton.addEventListener('click', async () => {
   }
 
   if (isLive()) {
-    activeRecorder = createRecorder(canvas, mimeType, 60);
-    activeRecorder.start();
-    recordButton.textContent = 'Stop';
-    recordButton.classList.add('recording');
+    // openRecording() awaits the AudioContext resume, so activeRecorder is
+    // assigned a tick later than it used to be. Disabling the button closes
+    // that window — a second click during the await would sail past the
+    // `if (activeRecorder)` guard above and start a second recording.
+    recordButton.disabled = true;
+    try {
+      activeRecorder = await openRecording();
+    } finally {
+      recordButton.disabled = false;
+    }
     note.textContent = 'Recording… press Stop when finished.';
     el('liveInput').focus();
     return;
@@ -358,10 +451,12 @@ recordButton.addEventListener('click', async () => {
     return;
   }
 
-  activeRecorder = createRecorder(canvas, mimeType, 60);
-  activeRecorder.start();
-  recordButton.textContent = 'Stop';
-  recordButton.classList.add('recording');
+  recordButton.disabled = true;
+  try {
+    activeRecorder = await openRecording();
+  } finally {
+    recordButton.disabled = false;
+  }
   note.textContent = 'Recording…';
   play();
 });
@@ -378,5 +473,14 @@ function syncSenderNameVisibility() {
 }
 el('style').addEventListener('input', syncSenderNameVisibility);
 syncSenderNameVisibility();
+
+// Humanize redistributes time inside a typewriter reveal, so with the reveal
+// switched off it has nothing to act on. Hide it rather than offer a control
+// that does nothing.
+function syncHumanizeVisibility() {
+  el('humanizeField').hidden = !el('typingEnabled').checked;
+}
+el('typingEnabled').addEventListener('input', syncHumanizeVisibility);
+syncHumanizeVisibility();
 
 applyMode();

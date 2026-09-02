@@ -1,4 +1,5 @@
 import { graphemes, measureBubble } from './layout.js';
+import { revealedCount } from './typing.js';
 
 const APPEAR_MS = 220;
 const SIDE_MARGIN_RATIO = 0.06;
@@ -95,14 +96,13 @@ function colorsFor(side, settings) {
 
 // How much of an item's text is on screen at `elapsed`. A bubble is never
 // empty: once typing starts, at least the first grapheme shows.
-function visibleText(item, elapsed) {
+//
+// The reveal curve itself lives in typing.js, not here — sound.js needs the
+// same answer to click on, and two copies of the formula drift apart.
+function visibleText(item, elapsed, humanize) {
   if (elapsed >= item.typeEnd) return item.text;
-
   const parts = graphemes(item.text);
-  const span = item.typeEnd - item.typeStart;
-  const progress = span <= 0 ? 1 : (elapsed - item.typeStart) / span;
-  const shown = Math.max(1, Math.ceil(progress * parts.length));
-  return parts.slice(0, shown).join('');
+  return parts.slice(0, revealedCount(item, elapsed, humanize)).join('');
 }
 
 // Returns the stacked boxes for every item visible at `elapsed`, in draw order.
@@ -117,7 +117,7 @@ export function layoutScene(ctx, timeline, elapsed, settings) {
   for (const item of timeline.items) {
     if (elapsed < item.typeStart) break;
 
-    const text = visibleText(item, elapsed);
+    const text = visibleText(item, elapsed, settings.humanize || 0);
     const measured = measureBubble(ctx, text, m);
     const progress = Math.min(1, (elapsed - item.typeStart) / APPEAR_MS);
     boxes.push({
