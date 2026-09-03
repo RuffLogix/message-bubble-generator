@@ -2,6 +2,10 @@ import { graphemes, measureBubble } from './layout.js';
 import { revealedCount } from './typing.js';
 
 const APPEAR_MS = 220;
+export const FADE_MS = 420;
+// Extra travel on the way out, as a fraction of the space the bubble is
+// giving up. See exitRiseFor for why plain `fade * advance` is not enough.
+const EXIT_RISE_RATIO = 0.9;
 const SIDE_MARGIN_RATIO = 0.06;
 const MAX_BUBBLE_RATIO = 0.72;
 const GUTTER_RATIO = 0.55;
@@ -19,6 +23,10 @@ function metricsFor(settings) {
     bottomPad: Math.round(settings.height * BOTTOM_PAD_RATIO),
     radius: Math.round(fontSize * 0.6),
   };
+}
+
+function easeOutCubic(t) {
+  return 1 - Math.pow(1 - t, 3);
 }
 
 function easeOutBack(t) {
@@ -105,17 +113,53 @@ function visibleText(item, elapsed, humanize) {
   return parts.slice(0, revealedCount(item, elapsed, humanize)).join('');
 }
 
+// How faded the item at `index` is at `elapsed`, 0 (opaque) to 1 (gone). The
+// fade clock starts when the message `limit` places newer than it begins
+// typing, so the stack settles at roughly `limit` bubbles on screen. A falsy
+// or non-positive `limit` disables it and nothing ever fades.
+//
+// This is a pure function of the timeline and the clock, like everything else
+// on the render path — a fade must answer the same at time T on replay as it
+// did in the preview, or a recording stops matching what was on screen.
+export function fadeAt(items, index, elapsed, limit) {
+  if (!limit || limit <= 0) return 0;
+  const trigger = items[index + limit];
+  if (!trigger) return 0;
+  return Math.min(1, Math.max(0, (elapsed - trigger.typeStart) / FADE_MS));
+}
+
+// How far up a fading bubble has drifted from where the layout put it, in
+// output pixels. `advance` is the space it is giving up — its own height plus
+// the gutter under it.
+//
+// The stack is bottom-anchored, so as that space is surrendered the camera
+// pushes everything back down by exactly the same amount: a rise of
+// `fade * advance` would leave the bubble sitting perfectly still on screen
+// while the stack closed up underneath it. That term only pays the camera
+// back. The eased `EXIT_RISE_RATIO` term on top is the travel you actually
+// see, so the bubble lifts away from the stack as it goes.
+export function exitRiseFor(fade, height, gutter) {
+  if (fade <= 0) return 0;
+  const advance = height + gutter;
+  return advance * (fade + EXIT_RISE_RATIO * easeOutCubic(fade));
+}
+
 // Returns the stacked boxes for every item visible at `elapsed`, in draw order.
 // `y` is relative to the top of the content column, before any camera offset.
 export function layoutScene(ctx, timeline, elapsed, settings) {
   const m = metricsFor(settings);
   ctx.font = `${settings.fontSize}px ${settings.fontFamily}`;
 
+  const items = timeline.items;
   const boxes = [];
   let y = 0;
 
-  for (const item of timeline.items) {
+  for (let i = 0; i < items.length; i += 1) {
+    const item = items[i];
     if (elapsed < item.typeStart) break;
+
+    const fade = fadeAt(items, i, elapsed, settings.maxVisible);
+    if (fade >= 1) continue;
 
     const text = visibleText(item, elapsed, settings.humanize || 0);
     const measured = measureBubble(ctx, text, m);
@@ -129,9 +173,15 @@ export function layoutScene(ctx, timeline, elapsed, settings) {
       height: measured.height,
       lines: measured.lines,
       progress,
+      fade,
+      exitRise: exitRiseFor(fade, measured.height, m.gutter),
       item,
     });
-    y += measured.height + m.gutter;
+    // A fading bubble keeps its drawn size but surrenders its share of the
+    // column as it goes, so the stack slides up smoothly instead of jumping
+    // the moment the item is dropped. contentHeight shrinks with it, which is
+    // all the bottom-anchored camera needs to follow.
+    y += (measured.height + m.gutter) * (1 - fade);
   }
 
   for (const box of boxes) {
@@ -175,10 +225,17 @@ export function renderFrame(ctx, timeline, elapsed, settings) {
   for (const box of scene.boxes) {
     const { bg, fg } = colorsFor(box.side, settings);
     const scale = box.progress >= 1 ? 1 : 0.7 + 0.3 * easeOutBack(box.progress);
-    const alpha = Math.min(1, box.progress * 1.6);
+    // Squared, so opacity holds up through the first half of the exit and then
+    // drops away. A linear fade against this much travel leaves the bubble too
+    // faint to see itself move.
+    const alpha = Math.min(1, box.progress * 1.6) * (1 - box.fade * box.fade);
 
     ctx.save();
     ctx.globalAlpha = alpha;
+    // Slides the bubble up out of the stack as it fades. Applied here rather
+    // than to box.y so the layout — and therefore contentHeight and the
+    // camera — stay unaware of it; this is presentation, not stacking.
+    if (box.exitRise > 0) ctx.translate(0, -box.exitRise);
     const originX = box.side === 'left' ? box.x : box.x + box.width;
     ctx.translate(originX, box.y + box.height);
     ctx.scale(scale, scale);

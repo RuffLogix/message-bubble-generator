@@ -97,6 +97,9 @@ R: ว่าง</textarea>
             <label class="field"><span>Size (px)</span>
               <input type="number" id="fontSize" value="34" min="12" max="200" step="1" /></label>
           </div>
+          <label class="field"><span>Fade after (messages)</span>
+            <input type="number" id="maxVisible" value="0" min="0" max="99" step="1" /></label>
+          <p class="note">Keeps this many bubbles on screen — older ones fade out and the stack closes up. 0 keeps everything.</p>
         </section>
 
         <section class="group">
@@ -132,6 +135,6 @@ R: ว่าง</textarea>
         <canvas id="canvas"></canvas>
       </section>
     </main>
-    <script type="module" src="src/app.js?v=5"></script>
+    <script type="module" src="src/app.js?v=6"></script>
   </body>
 </html>

@@ -75,6 +75,8 @@ function readSettings() {
     // so the one-item-shape-two-producers contract stays exactly as it was.
     humanize: num('humanize', 0, 100, 40) / 100,
     fontSize: num('fontSize', 12, 200, 34),
+    // 0 means no limit — the stack grows and the camera scrolls, as before.
+    maxVisible: num('maxVisible', 0, 99, 0),
     fontFamily: el('fontFamily').value,
     senderName: el('senderName').value,
     cameraY: 0,
@@ -314,7 +316,7 @@ el('liveInput').addEventListener('keydown', (event) => {
 for (const id of [
   'messages', 'typingEnabled', 'humanize', 'holdMs', 'msPerChar', 'gapMs', 'style',
   'senderName', 'aspect', 'leftBg', 'leftFg', 'rightBg', 'rightFg',
-  'bgColor', 'transparent', 'fontSize', 'fontFamily',
+  'bgColor', 'transparent', 'fontSize', 'fontFamily', 'maxVisible',
 ]) {
   el(id).addEventListener('input', () => {
     if (isLive()) {
@@ -354,6 +356,7 @@ for (const id of [
 // rather than every keystroke — see clampNum/num above for why.
 const NUMERIC_FIELDS = {
   fontSize: [12, 200, 34],
+  maxVisible: [0, 99, 0],
   msPerChar: [0, 1000, 45],
   holdMs: [0, 10000, 700],
   gapMs: [0, 10000, 300],

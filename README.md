@@ -48,6 +48,7 @@ The panel groups the controls under **Timing**, **Appearance**, and
 | Sender name | Appearance | Drawn above left-side bubbles; only the LINE style renders it, so the field appears only for that style |
 | Aspect ratio | Appearance | 9:16 (1080×1920), 1:1 (1080×1080), or 16:9 (1920×1080) |
 | Font | Appearance | The family, and the size in output pixels |
+| Fade after (messages) | Appearance | Keeps this many bubbles on screen: once a newer message starts typing, the one that falls out of the window slides up and fades over 420ms while the stack closes up behind it. 0 keeps every bubble and scrolls instead |
 | Bubble and text colours | Colors | Per-side bubble and text colour |
 | Stage background | Colors | The background key colour |
 | Transparent | Colors | Skips the background fill so the WebM carries alpha instead of a key colour |
@@ -141,6 +142,11 @@ coverage by design; they are verified by hand against the checklist below.
 21. Replay determinism: play the same script twice at the same Humanize, and
     the characters land on the same frames both times — no flicker of a
     grapheme appearing and vanishing.
+22. Fade after N: at 0 nothing fades and the stack scrolls as before. Set to 3
+    with a six-message script and the oldest bubble lifts up and away as each
+    new one starts typing, the stack closing up under it in one smooth slide —
+    no jump when the faded bubble is finally dropped, and the bubbles that stay
+    do not drift. The same holds in live mode.
 
 ## Architecture
 
